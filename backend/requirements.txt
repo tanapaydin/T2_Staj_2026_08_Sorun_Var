@@ -1,0 +1,22 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+alembic
+python-dotenv
+
+# Validation
+pydantic
+email-validator
+
+# Authentication
+passlib[bcrypt]
+bcrypt
+python-jose[cryptography]
+
+# File upload
+python-multipart
+
+# External services
+supabase
+openai

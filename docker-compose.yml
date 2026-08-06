@@ -1,0 +1,39 @@
+services:
+
+  db:
+    image: postgres:16
+    container_name: sorunburada_db
+    restart: always
+
+    environment:
+      POSTGRES_DB: sorunburada
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
+  backend:
+    build: ./backend
+    container_name: sorunburada_backend
+    restart: always
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/sorunburada
+
+    volumes:
+      - ./backend:/app
+
+    depends_on:
+      - db
+
+
+volumes:
+  postgres_data:

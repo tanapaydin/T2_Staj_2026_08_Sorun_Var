@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+
+# Alembic
+backend/alembic/versions/*.pyc
+
+# Expo / React Native
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Claude
+.claude/
+CLAUDE.md
+AGENTS.md
