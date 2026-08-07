@@ -1,103 +1,144 @@
 # Sorun Var
 
-A location-based civic issue reporting platform that enables citizens to report problems in their city, municipalities to manage incoming reports, and AI-assisted categorization to speed up resolution.
+A location-based civic issue reporting platform built with **FastAPI**, **PostgreSQL**, **Docker**, and **Expo React Native**.
 
 ## Project Structure
 
-```
+```text
 SorunVar/
 ├── backend/                # FastAPI backend
 ├── mobile/                 # Expo React Native application
 ├── docs/                   # Project documentation
-├── docker-compose.yml      # Docker services
+├── docker-compose.yml
 └── README.md
 ```
 
-## Tech Stack
+## Requirements
 
-### Backend
+Install the following software before running the project:
 
-* FastAPI
-* PostgreSQL
-* SQLAlchemy
-* Alembic
-* Docker
-* JWT Authentication (planned)
+* Git
+* Docker Desktop
+* Python 3.12+
+* Node.js (LTS recommended)
+* npm
 
-### Mobile
+## Clone the Repository
 
-* React Native
-* Expo
-* TypeScript
-* Expo Router
+```bash
+git clone https://github.com/tanapaydin/T2_Staj_2026_08_Sorun_Var.git
+cd T2_Staj_2026_08_Sorun_Var
+```
 
-### Storage
+## Backend Setup
 
-* Supabase Storage
+Create and activate a Python virtual environment.
 
-### AI
+### Windows
 
-* OpenAI Vision / Image Analysis
+```bash
+cd backend
+python -m venv .venv
+.venv\\Scripts\\activate
+```
 
-## Database
+### macOS / Linux
 
-Main entities:
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-* Users
-* Reports
-* Report Images
-* Comments
-* Report Status History
+Install the backend dependencies:
 
-See `docs/database.md` for details.
+```bash
+pip install -r requirements.txt
+```
 
-## Running the Project
+Return to the project root:
 
-### Backend
+```bash
+cd ..
+```
+
+## Start Backend and Database
+
+Start the Docker services:
 
 ```bash
 docker compose up --build -d
 ```
 
-API:
+Run the database migrations:
 
+```bash
+docker compose exec backend alembic upgrade head
 ```
+
+(Optional) Load sample data:
+
+```bash
+docker compose exec backend python -m app.seed
+```
+
+The backend API will be available at:
+
+```text
 http://localhost:8000
 ```
 
-### Database
+Swagger documentation:
 
-PostgreSQL:
-
+```text
+http://localhost:8000/docs
 ```
+
+## Mobile Setup
+
+Open a new terminal and install the mobile dependencies:
+
+```bash
+cd mobile
+npm install
+```
+
+Create a local environment file:
+
+### Windows
+
+```bash
+copy .env.example .env
+```
+
+### macOS / Linux
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set the backend URL:
+
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_LOCAL_IP:8000
+```
+
+Replace `YOUR_LOCAL_IP` with the local IP address of the machine running the backend.
+
+Start the Expo development server:
+
+```bash
+npx expo start
+```
+
+## PostgreSQL
+
+The default database configuration is:
+
+```text
 Host: localhost
 Port: 5432
 Database: sorunburada
 User: postgres
 Password: postgres
 ```
-
-## Development Workflow
-
-* `develop` → active development branch
-* `main` → production-ready branch
-* `feature/*` → feature branches
-
-Example:
-
-```bash
-git checkout -b feature/auth
-```
-
-## Current Status
-
-* Docker environment configured
-* PostgreSQL running
-* Alembic migration system configured
-* Initial database schema created
-* Backend architecture scaffolded
-* Mobile Expo project initialized
-
-## License
-
-Private project – Sorun Var team.
