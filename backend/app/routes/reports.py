@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-
 import requests
 
 from app.database import get_db
@@ -11,8 +10,6 @@ router = APIRouter(
     prefix="/reports",
     tags=["Reports"],
 )
-
-
 
 
 @router.get("/")
@@ -77,6 +74,7 @@ def report_statistics(db: Session = Depends(get_db)):
         "resolution_rate": round(float(resolution_rate), 1),
     }
 
+
 @router.get("/statistics/category")
 def category_statistics(db: Session = Depends(get_db)):
     results = (
@@ -133,6 +131,89 @@ def search_location(query: str):
         "latitudeDelta": 0.08,
         "longitudeDelta": 0.08,
     }
+
+
+@router.get("/search/suggestions")
+def search_suggestions(query: str = Query(..., min_length=2)):
+    url = "https://nominatim.openstreetmap.org/search"
+
+    params = {
+        "q": query,
+        "format": "jsonv2",
+        "countrycodes": "tr",
+        "limit": 8,
+        "addressdetails": 1,
+        "extratags": 1,
+        "namedetails": 1,
+    }
+
+    headers = {
+        "User-Agent": "SorunVar/1.0"
+    }
+
+    response = requests.get(
+        url,
+        params=params,
+        headers=headers,
+        timeout=10,
+    )
+
+    response.raise_for_status()
+    results = response.json()
+
+    suggestions = []
+
+    for item in results:
+        address = item.get("address", {})
+
+        municipality = (
+            address.get("municipality")
+            or address.get("city_district")
+            or address.get("town")
+            or address.get("city")
+            or address.get("county")
+        )
+
+        city = (
+            address.get("city")
+            or address.get("state")
+            or address.get("province")
+            or municipality
+        )
+
+        if not municipality:
+            continue
+
+        name = f"{municipality} Belediyesi, {city}"
+
+        suggestions.append(
+            {
+                "name": name,
+                "latitude": float(item["lat"]),
+                "longitude": float(item["lon"]),
+            }
+        )
+
+    # Aynı belediyeyi tekrar etme
+    unique = []
+    seen = set()
+
+    for s in suggestions:
+        if s["name"] not in seen:
+            unique.append(s)
+            seen.add(s["name"])
+
+    # Yazılan metinle başlayanları öne al
+    q = query.lower()
+
+    unique.sort(
+        key=lambda x: (
+            not x["name"].lower().startswith(q),
+            len(x["name"]),
+        )
+    )
+
+    return unique
 
 
 @router.get("/{report_id}")

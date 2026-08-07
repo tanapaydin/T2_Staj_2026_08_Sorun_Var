@@ -5,7 +5,7 @@ A location-based civic issue reporting platform that enables citizens to report 
 ## Project Structure
 
 ```
-SorunBurada/
+SorunVar/
 ├── backend/                # FastAPI backend
 ├── mobile/                 # Expo React Native application
 ├── docs/                   # Project documentation
