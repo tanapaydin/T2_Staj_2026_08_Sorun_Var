@@ -31,6 +31,15 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class AuthResponse(Token):
+    user: UserResponse
+
+
 # ---------- REPORT ----------
 
 class ReportCreate(BaseModel):

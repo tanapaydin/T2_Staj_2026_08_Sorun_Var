@@ -1,14 +1,11 @@
-# Auth Routes Şu şekilde Olacak:
-# POST /auth/register: Kullanıcı kaydı için kullanılacak. Gerekli alanlar: name, email, password
-# POST /auth/login: Kullanıcı girişi için kullanılacak. Gerekli alanlar: email, password
-# GET /auth/me: Kullanıcının kendi bilgilerini almak için kullanılacak. Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
-# POST /auth/logout: Kullanıcının oturumunu kapatmak için kullanılacak. Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
-# POST /auth/refresh: Kullanıcının oturumunu yenilemek için kullanılacak. Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
-# POST /auth/verify-email: Kullanıcının e-posta adresini doğrulamak için kullanılacak. Gerekli alanlar: token (e-posta doğrulama tokenı). Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
-# POST /auth/resend-verification-email: Kullanıcının e-posta doğrulama e-postasını yeniden göndermek için kullanılacak. Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
-# POST /auth/forgot-password: Kullanıcının şifresini unuttuğunda şifre sıfırlama e-postası göndermek için kullanılacak. Gerekli alanlar: email. Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
+﻿from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-from fastapi import APIRouter
+from app.database import get_db
+from app.models import User
+from app.schemas import UserRegister, UserLogin, AuthResponse
+from app.utils.security import hash_password, verify_password
+from app.utils.jwt import create_access_token
 
 router = APIRouter(
     prefix="/auth",
@@ -16,11 +13,49 @@ router = APIRouter(
 )
 
 
-@router.post("/register")
-def register():
-    return {"message": "register endpoint"}
+def create_user_token(user: User) -> str:
+    return create_access_token({"sub": str(user.id), "email": user.email})
 
 
-@router.post("/login")
-def login():
-    return {"message": "login endpoint"}
+@router.post("/register", response_model=AuthResponse)
+def register(user_create: UserRegister, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user_create.email.lower()).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bu e-posta zaten kayıtlı.",
+        )
+
+    new_user = User(
+        name=user_create.name,
+        email=user_create.email.lower(),
+        password_hash=hash_password(user_create.password),
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    access_token = create_user_token(new_user)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": new_user,
+    }
+
+
+@router.post("/login", response_model=AuthResponse)
+def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == user_credentials.email.lower()).first()
+    if not user or not verify_password(user_credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-posta veya şifre yanlış.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_user_token(user)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user,
+    }
