@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.routes import ai, auth, comments, reports, users
 
 app = FastAPI(
-    title="Sorun Burada API",
+    title="Sorun Var API",
     version="1.0.0",
 )
 
@@ -16,4 +16,4 @@ app.include_router(ai.router)
 
 @app.get("/")
 def root():
-    return {"message": "Sorun Burada API"}
+    return {"message": "Sorun Var API"}
