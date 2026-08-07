@@ -1,4 +1,4 @@
-# Sorun Burada
+# Sorun Var
 
 A location-based civic issue reporting platform that enables citizens to report problems in their city, municipalities to manage incoming reports, and AI-assisted categorization to speed up resolution.
 
@@ -100,4 +100,4 @@ git checkout -b feature/auth
 
 ## License
 
-Private project – Sorun Burada team.
+Private project – Sorun Var team.
