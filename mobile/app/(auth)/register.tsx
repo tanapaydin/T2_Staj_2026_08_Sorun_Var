@@ -5,10 +5,10 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { register } from "../../lib/auth";
 
