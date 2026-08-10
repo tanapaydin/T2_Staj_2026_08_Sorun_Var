@@ -1,61 +1,116 @@
 import { useEffect, useRef, useState } from "react";
+import { Platform, StyleSheet, View, ActivityIndicator } from "react-native";
+
+import { useReports } from "../../hooks/useReports";
+import CitySummaryCard from "../../components/map/CitySummaryCard";
+
 import {
-  Platform,
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
-  ScrollView,
-} from "react-native";
+  AppButton,
+  AppCard,
+  AppText,
+} from "../../components/common";
+
+import {
+  Colors,
+  Spacing,
+} from "../../theme";
+
+import {
+  fetchLocationSuggestions,
+  LocationSuggestion,
+} from "../../lib/api";
+
+import { Report } from "../../types/report";
+
+import FilterModal from "../../components/map/FilterModal";
+import MapMarkers from "../../components/map/MapMarkers";
+import ReportCard from "../../components/map/ReportCard";
+import SearchBar from "../../components/map/SearchBar";
+import { useUserLocation } from "../../hooks/useUserLocation";
+import { useMapCityFilter } from "../../hooks/useMapCityFilter";
 
 const isWeb = Platform.OS === "web";
+
 let MapView: any = View;
 let Marker: any = View;
 
 if (!isWeb) {
-  const maps = require("react-native-maps");
-  MapView = maps.default;
-  Marker = maps.Marker;
+  MapView = require("react-native-map-clustering").default;
+  Marker = require("react-native-maps").Marker;
 }
-
-import {
-  fetchReports,
-  fetchLocationSuggestions,
-  LocationSuggestion,
-} from "../../lib/api";
-import { Report } from "../../types/report";
-
-const categories = [
-  { label: "Tümü", value: "all" },
-  { label: "Yol", value: "road" },
-  { label: "Çöp", value: "trash" },
-  { label: "Aydınlatma", value: "lighting" },
-  { label: "İnşaat", value: "construction" },
-  { label: "Su", value: "water" },
-  { label: "Park", value: "park" },
-  { label: "Trafik", value: "traffic" },
-  { label: "Gürültü", value: "noise" },
-  { label: "Hayvan", value: "animal" },
-  { label: "Diğer", value: "other" },
-];
 
 export default function MapScreen() {
   const mapRef = useRef<any>(null);
 
+  const { userLocation, currentCity } =
+    useUserLocation();
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedCity, setSelectedCity] = useState<{
+  name: string;
+  count: number;
+} | null>(null);
+  const [region, setRegion] = useState({
+    latitude: 39.925,
+    longitude: 32.8369,
+    latitudeDelta: 0.12,
+    longitudeDelta: 0.12,
+  });
+  const {
+    reports,
+    loading,
+    applyFilters: applyReportFilters,
+    resetFilters: resetReportFilters,
+  } = useReports();
 
-  const [loading, setLoading] = useState(true);
-  const [reports, setReports] = useState<Report[]>([]);
-  const [selectedReport, setSelectedReport] =
-    useState<Report | null>(null);
+  const {
+    cityFilterMode,
+    visibleReports,
+    showSearchAreaButton,
+    handleSearchCity,
+    showSearchArea,
+    showCurrentCity,
+    showAllCities,
+  } = useMapCityFilter(reports, currentCity);
+
+  const [filterVisible, setFilterVisible] = useState(false);
+
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const [resolvedFilter, setResolvedFilter] = useState<
+    boolean | undefined
+  >(undefined);
+
+  const [dateFilter, setDateFilter] = useState<
+    "today" | "7d" | "30d" | undefined
+  >(undefined);
+
+  const [priorityFilter, setPriorityFilter] = useState<
+    "high" | "medium" | "low" | undefined
+  >(undefined);
 
   useEffect(() => {
-    loadReports();
-  }, []);
+    if (reports.length > 0 && !isWeb) {
+      setTimeout(() => {
+        mapRef.current?.fitToCoordinates(
+          reports.map((r) => ({
+            latitude: r.latitude,
+            longitude: r.longitude,
+          })),
+          {
+            edgePadding: {
+              top: 180,
+              right: 60,
+              bottom: 250,
+              left: 60,
+            },
+            animated: true,
+          }
+        );
+      }, 300);
+    }
+  }, [reports]);
 
   useEffect(() => {
     const timeout = setTimeout(async () => {
@@ -75,72 +130,16 @@ export default function MapScreen() {
     return () => clearTimeout(timeout);
   }, [search]);
 
-  async function loadReports() {
-    try {
-      setLoading(true);
-
-      const data = await fetchReports();
-      setReports(data);
-
-      if (data.length > 0 && !isWeb) {
-        setTimeout(() => {
-          mapRef.current?.fitToCoordinates(
-            data.map((r: Report) => ({
-              latitude: r.latitude,
-              longitude: r.longitude,
-            })),
-            {
-              edgePadding: {
-                top: 180,
-                right: 60,
-                bottom: 250,
-                left: 60,
-              },
-              animated: true,
-            }
-          );
-        }, 300);
-      }
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const filteredReports =
-    selectedCategory === "all"
-      ? reports
-      : reports.filter((r) => r.category === selectedCategory);
-
-  function getMarkerColor(category: string) {
-    switch (category) {
-      case "road":
-        return "#EF4444";
-      case "trash":
-        return "#22C55E";
-      case "lighting":
-        return "#F59E0B";
-      case "construction":
-        return "#64748B";
-      case "water":
-        return "#2563EB";
-      case "park":
-        return "#16A34A";
-      case "traffic":
-        return "#7C3AED";
-      case "noise":
-        return "#DB2777";
-      case "animal":
-        return "#92400E";
-      default:
-        return "#475569";
-    }
-  }
-
   function selectSuggestion(item: LocationSuggestion) {
     setSearch(item.name);
     setSuggestions([]);
+
+    const city = detectCity(
+      item.latitude,
+      item.longitude
+    );
+
+    handleSearchCity(city);
 
     if (!isWeb) {
       mapRef.current?.animateToRegion(
@@ -156,172 +155,219 @@ export default function MapScreen() {
   }
 
   function clearSearch() {
-  setSearch("");
-  setSuggestions([]);
-}
-
-function searchFirstSuggestion() {
-  if (suggestions.length > 0) {
-    selectSuggestion(suggestions[0]);
+    setSearch("");
+    setSuggestions([]);
   }
-}
+
+  function searchFirstSuggestion() {
+    if (suggestions.length > 0) {
+      selectSuggestion(suggestions[0]);
+    }
+  }
+  function detectCity(lat: number, lon: number) {
+    // Ankara
+    if (
+      lat > 39.5 &&
+      lat < 40.2 &&
+      lon > 32.4 &&
+      lon < 33.2
+    ) {
+      return "Ankara";
+    }
+
+    // İstanbul
+    if (
+      lat > 40.8 &&
+      lat < 41.3 &&
+      lon > 28.5 &&
+      lon < 29.5
+    ) {
+      return "İstanbul";
+    }
+
+    // İzmir
+    if (
+      lat > 38.2 &&
+      lat < 38.6 &&
+      lon > 26.8 &&
+      lon < 27.4
+    ) {
+      return "İzmir";
+    }
+
+    return "Diğer";
+  }
+
+  async function applyFilters() {
+    setFilterVisible(false);
+
+    await applyReportFilters({
+      category: categoryFilter,
+      resolved: resolvedFilter,
+      priority: priorityFilter,
+      date: dateFilter,
+      sort: "newest",
+    });
+  }
+
+  async function resetFilters() {
+    setCategoryFilter("all");
+    setResolvedFilter(undefined);
+    setDateFilter(undefined);
+    setPriorityFilter(undefined);
+
+    setFilterVisible(false);
+
+    await resetReportFilters();
+  }
 
   return (
     <View style={styles.container}>
-      {/* Arama Kutusu */}
-            {/* Arama Kutusu */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          placeholder="İl veya ilçe ara"
-          value={search}
-          onChangeText={setSearch}
-          style={styles.searchInput}
-          returnKeyType="search"
-          onSubmitEditing={searchFirstSuggestion}
-        />
+      {/* Arama */}
+      <SearchBar
+        search={search}
+        setSearch={setSearch}
+        suggestions={suggestions}
+        onSelectSuggestion={selectSuggestion}
+        onSearch={searchFirstSuggestion}
+        onClear={clearSearch}
+      />
 
-        {search.length > 0 && (
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={clearSearch}
-          >
-            <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={styles.searchButton}
-          onPress={searchFirstSuggestion}
-        >
-          <Text style={styles.searchButtonText}>Ara</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Öneriler */}
-      {suggestions.length > 0 && (
-        <View style={styles.suggestionsContainer}>
-          {suggestions.map((item, index) => (
-            <TouchableOpacity
-              key={`${item.name}-${index}`}
-              style={styles.suggestionItem}
-              onPress={() => selectSuggestion(item)}
-            >
-              <Text style={styles.suggestionText}>
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {showSearchAreaButton && (
+        <View style={styles.searchAreaButtonContainer}>
+          <AppButton
+            title="Bu çevredeki şikayetleri göster"
+            onPress={showSearchArea}
+          />
         </View>
       )}
 
-      {/* Kategori Filtreleri */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryContainer}
-        contentContainerStyle={styles.categoryContent}
-      >
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.value}
-            style={[
-              styles.categoryChip,
-              selectedCategory === cat.value &&
-                styles.categoryChipActive,
-            ]}
-            onPress={() => setSelectedCategory(cat.value)}
-          >
-            <Text
-              style={[
-                styles.categoryChipText,
-                selectedCategory === cat.value &&
-                  styles.categoryChipTextActive,
-              ]}
-            >
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Filtre */}
+      <View style={styles.filterBar}>
+        <AppButton
+          title="Filtre"
+          variant="secondary"
+          onPress={() => setFilterVisible(true)}
+          style={styles.filterButton}
+        />
+      </View>
 
       {/* Harita */}
       {isWeb ? (
         <View style={[styles.map, styles.webFallback]}>
-          <Text style={styles.webFallbackTitle}>Harita webde kullanılamıyor</Text>
-          <Text style={styles.webFallbackText}>
-            Bu özellik yalnızca mobil cihazlarda desteklenir.
-          </Text>
+          <AppCard style={styles.webCard}>
+            <AppText
+              variant="title"
+              color={Colors.primary}
+              style={styles.webFallbackTitle}
+            >
+              Harita webde kullanılamıyor
+            </AppText>
+
+            <AppText
+              variant="body"
+              color={Colors.textSecondary}
+              style={styles.webFallbackText}
+            >
+              Bu özellik yalnızca mobil cihazlarda desteklenir.
+            </AppText>
+          </AppCard>
         </View>
       ) : (
         <MapView
           ref={mapRef}
           style={styles.map}
-          initialRegion={{
-            latitude: 39.925,
-            longitude: 32.8369,
-            latitudeDelta: 0.12,
-            longitudeDelta: 0.12,
-          }}
+          initialRegion={region}
+          onRegionChangeComplete={setRegion}
         >
-          {filteredReports.map((report) => (
+          <MapMarkers
+            reports={visibleReports}
+            onSelectReport={(report) => {
+              setSelectedCity(null);
+              setSelectedReport(report);
+            }}
+            onSelectCity={(city) => {
+              setSelectedReport(null);
+              setSelectedCity(city);
+            }}
+            latitudeDelta={region.latitudeDelta}
+          />
+
+          {userLocation && (
             <Marker
-              key={report.id}
-              coordinate={{
-                latitude: report.latitude,
-                longitude: report.longitude,
-              }}
-              pinColor={getMarkerColor(report.category)}
-              onPress={() => setSelectedReport(report)}
-            />
-          ))}
+              coordinate={userLocation}
+              tracksViewChanges={false}
+            >
+              <View
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: "#2563EB",
+                  borderWidth: 3,
+                  borderColor: "#FFFFFF",
+                }}
+              />
+            </Marker>
+          )}
         </MapView>
       )}
 
       {/* Loading */}
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#2563EB" />
-          <Text style={styles.loadingText}>
-            Raporlar yükleniyor...
-          </Text>
-        </View>
-      )}
+          <ActivityIndicator
+            size="large"
+            color={Colors.primary}
+          />
 
-      {/* Detay Kartı */}
-      {selectedReport && (
-        <View style={styles.bottomCard}>
-          <Text style={styles.cardTitle}>
-            {selectedReport.title}
-          </Text>
-
-          <Text style={styles.cardText}>
-            Kategori: {selectedReport.category}
-          </Text>
-
-          <Text style={styles.cardText}>
-            Durum: {selectedReport.status}
-          </Text>
-
-          <Text style={styles.cardText}>
-            Öncelik: {selectedReport.priority}
-          </Text>
-
-          <Text style={styles.cardText}>
-            Görüntülenme: {selectedReport.view_count}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setSelectedReport(null)}
+          <AppText
+            variant="bodyMedium"
+            color={Colors.textSecondary}
+            style={styles.loadingText}
           >
-            <Text style={styles.closeText}>
-              Kapat
-            </Text>
-          </TouchableOpacity>
+            Raporlar yükleniyor...
+          </AppText>
         </View>
       )}
+
+      {/* Filtre Modal */}
+      <FilterModal
+        visible={filterVisible}
+        onClose={() => setFilterVisible(false)}
+
+        cityFilterMode={cityFilterMode}
+        onShowCurrentCity={showCurrentCity}
+        onShowAllCities={showAllCities}
+
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
+
+        resolvedFilter={resolvedFilter}
+        setResolvedFilter={setResolvedFilter}
+
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+
+        priorityFilter={priorityFilter}
+        setPriorityFilter={setPriorityFilter}
+
+        onApply={applyFilters}
+        onReset={resetFilters}
+      />
+
+      {/* Seçilen rapor */}
+      <ReportCard
+        report={selectedReport}
+        onClose={() => setSelectedReport(null)}
+      />
+      <CitySummaryCard
+        city={selectedCity}
+        onClose={() => setSelectedCity(null)}
+      />
     </View>
   );
+  
 }
 
 const styles = StyleSheet.create({
@@ -333,193 +379,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  searchContainer: {
-  position: "absolute",
-  top: 55,
-  left: 20,
-  right: 20,
-  zIndex: 20,
-
-  flexDirection: "row",
-  alignItems: "center",
-
-  backgroundColor: "white",
-  borderRadius: 16,
-
-  paddingHorizontal: 14,
-  paddingVertical: 10,
-
-  elevation: 6,
-
-  shadowColor: "#000",
-  shadowOffset: {
-    width: 0,
-    height: 3,
-  },
-  shadowOpacity: 0.1,
-  shadowRadius: 8,
-},
-
-searchInput: {
-  flex: 1,
-  fontSize: 16,
-  paddingVertical: 4,
-},
-
-clearButton: {
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 8,
-},
-
-clearButtonText: {
-  fontSize: 16,
-  color: "#64748B",
-  fontWeight: "700",
-},
-
-searchButton: {
-  backgroundColor: "#2563EB",
-  paddingHorizontal: 14,
-  paddingVertical: 8,
-  borderRadius: 10,
-},
-
-searchButtonText: {
-  color: "white",
-  fontWeight: "700",
-},
-
-  suggestionsContainer: {
-    position: "absolute",
-    top: 115,
-    left: 20,
-    right: 20,
-    zIndex: 19,
-
-    backgroundColor: "white",
-
-    borderRadius: 16,
-
-    overflow: "hidden",
-
-    elevation: 6,
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-
-  suggestionItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E7EB",
-  },
-
-  suggestionText: {
-    fontSize: 15,
-    color: "#111827",
-  },
-
-  categoryContainer: {
+  filterBar: {
     position: "absolute",
     top: 120,
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
     zIndex: 18,
   },
 
-  categoryContent: {
-    paddingHorizontal: 16,
-  },
-
-  categoryChip: {
-    backgroundColor: "white",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    marginRight: 10,
-    elevation: 4,
-  },
-
-  categoryChipActive: {
-    backgroundColor: "#2563EB",
-  },
-
-  categoryChipText: {
-    color: "#334155",
-    fontWeight: "600",
-  },
-
-  categoryChipTextActive: {
-    color: "white",
-  },
-
-  bottomCard: {
-    position: "absolute",
-    bottom: 20,
-    left: 20,
-    right: 20,
-
-    backgroundColor: "white",
-
-    borderRadius: 20,
-
-    padding: 20,
-
-    elevation: 8,
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-  },
-
-  cardTitle: {
-    fontSize: 20,
-
-    fontWeight: "800",
-
-    marginBottom: 10,
-  },
-
-  cardText: {
-    fontSize: 15,
-
-    marginBottom: 6,
-
-    color: "#334155",
-  },
-
-  closeButton: {
-    marginTop: 16,
-
-    backgroundColor: "#2563EB",
-
-    borderRadius: 12,
-
-    paddingVertical: 12,
-
-    alignItems: "center",
-  },
-
-  closeText: {
-    color: "white",
-
-    fontWeight: "700",
-
-    fontSize: 15,
+  filterButton: {
+    alignSelf: "flex-start",
   },
 
   loadingOverlay: {
@@ -528,40 +397,52 @@ searchButtonText: {
     bottom: 0,
     left: 0,
     right: 0,
-
     justifyContent: "center",
     alignItems: "center",
-
     backgroundColor: "rgba(255,255,255,0.8)",
   },
 
   loadingText: {
     marginTop: 12,
-
-    color: "#334155",
-
-    fontSize: 15,
-
-    fontWeight: "600",
   },
 
   webFallback: {
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 24,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.background,
   },
+
+  webCard: {
+    width: "100%",
+  },
+
   webFallbackTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#1D4ED8",
-    marginBottom: 10,
     textAlign: "center",
+    marginBottom: Spacing.md,
   },
+
   webFallbackText: {
-    fontSize: 16,
-    color: "#475569",
     textAlign: "center",
     lineHeight: 22,
   },
+  clusterContainer: {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  backgroundColor: Colors.primary,
+  justifyContent: "center",
+  alignItems: "center",
+  borderWidth: 2,
+  borderColor: "#FFFFFF",
+},
+searchAreaButtonContainer: {
+  position: "absolute",
+  top: 118,
+  left: 20,
+  right: 20,
+  alignItems: "center",
+  zIndex: 1000,
+  elevation: 10,
+},
 });

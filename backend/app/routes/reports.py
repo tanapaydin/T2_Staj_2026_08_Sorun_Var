@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from datetime import datetime, timedelta
 import requests
 
 from app.database import get_db
@@ -13,28 +14,69 @@ router = APIRouter(
 
 
 @router.get("/")
-def list_reports(db: Session = Depends(get_db)):
-    reports = db.query(Report).all()
+def list_reports(
+    category: str | None = None,
+    resolved: bool | None = None,
+    priority: str | None = None,
+    date: str | None = None,
+    sort: str = "newest",
+    db: Session = Depends(get_db),
+):
+    query = db.query(Report)
 
-    result = []
+    # Category filter
+    if category and category != "all":
+        query = query.filter(Report.category == category)
 
-    for report in reports:
-        result.append(
-            {
-                "id": str(report.id),
-                "title": report.title,
-                "category": report.category,
-                "latitude": report.latitude,
-                "longitude": report.longitude,
-                "status": report.status,
-                "progress": report.progress,
-                "priority": report.priority,
-                "view_count": report.view_count,
-                "created_at": report.created_at,
-            }
-        )
+    # Resolved / unresolved filter
+    if resolved is True:
+        query = query.filter(Report.progress == 100)
+    elif resolved is False:
+        query = query.filter(Report.progress < 100)
 
-    return result
+    # Priority filter
+    if priority:
+        query = query.filter(Report.priority == priority)
+
+    # Date filter
+    if date:
+        now = datetime.utcnow()
+
+        if date == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.filter(Report.created_at >= start)
+
+        elif date == "7d":
+            query = query.filter(Report.created_at >= now - timedelta(days=7))
+
+        elif date == "30d":
+            query = query.filter(Report.created_at >= now - timedelta(days=30))
+
+    # Sorting
+    if sort == "oldest":
+        query = query.order_by(Report.created_at.asc())
+    elif sort == "most_viewed":
+        query = query.order_by(Report.view_count.desc())
+    else:
+        query = query.order_by(Report.created_at.desc())
+
+    reports = query.all()
+
+    return [
+        {
+            "id": str(report.id),
+            "title": report.title,
+            "category": report.category,
+            "latitude": report.latitude,
+            "longitude": report.longitude,
+            "status": report.status,
+            "progress": report.progress,
+            "priority": report.priority,
+            "view_count": report.view_count,
+            "created_at": report.created_at,
+        }
+        for report in reports
+    ]
 
 
 @router.get("/statistics")
