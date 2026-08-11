@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 
 
 # ---------- AUTH ----------
@@ -11,6 +11,12 @@ class UserRegister(BaseModel):
     name: str
     email: EmailStr
     password: str
+
+    @validator("password")
+    def password_max_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Şifre en fazla 72 byte olabilir.")
+        return value
 
 
 class UserLogin(BaseModel):
