@@ -1,8 +1,44 @@
 import { API_CONFIG } from "../config/api";
 import { Report } from "../types/report";
 
-export async function fetchReports(): Promise<Report[]> {
-  const response = await fetch(`${API_CONFIG.BASE_URL}/reports`);
+export type ReportFilters = {
+  category?: string;
+  resolved?: boolean;
+  priority?: "high" | "medium" | "low";
+  date?: "today" | "7d" | "30d";
+  sort?: "newest" | "oldest" | "most_viewed";
+};
+
+export async function fetchReports(
+  filters?: ReportFilters
+): Promise<Report[]> {
+  const params = new URLSearchParams();
+
+  if (filters?.category && filters.category !== "all") {
+    params.append("category", filters.category);
+  }
+
+  if (filters?.resolved !== undefined) {
+    params.append("resolved", String(filters.resolved));
+  }
+
+  if (filters?.priority) {
+    params.append("priority", filters.priority);
+  }
+
+  if (filters?.date) {
+    params.append("date", filters.date);
+  }
+
+  if (filters?.sort) {
+    params.append("sort", filters.sort);
+  }
+
+  const url = params.toString()
+    ? `${API_CONFIG.BASE_URL}/reports?${params.toString()}`
+    : `${API_CONFIG.BASE_URL}/reports`;
+
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error("Failed to fetch reports");
@@ -22,6 +58,7 @@ export async function searchLocation(query: string) {
 
   return response.json();
 }
+
 export type LocationSuggestion = {
   name: string;
   latitude: number;
@@ -43,6 +80,7 @@ export async function fetchLocationSuggestions(
 
   return response.json();
 }
+
 export type ReportStatistics = {
   total_reports: number;
   resolved_reports: number;
