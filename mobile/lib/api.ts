@@ -9,6 +9,23 @@ export type ReportFilters = {
   sort?: "newest" | "oldest" | "most_viewed";
 };
 
+export type CreateReportInput = {
+  title: string;
+  description: string;
+  category: string;
+  latitude: number;
+  longitude: number;
+};
+
+async function parseError(response: Response) {
+  try {
+    const data = await response.json();
+    return data?.detail || data?.message || "İşlem başarısız oldu.";
+  } catch {
+    return "İşlem başarısız oldu.";
+  }
+}
+
 export async function fetchReports(
   filters?: ReportFilters
 ): Promise<Report[]> {
@@ -42,6 +59,27 @@ export async function fetchReports(
 
   if (!response.ok) {
     throw new Error("Failed to fetch reports");
+  }
+
+  return response.json();
+}
+
+export async function createReport(
+  input: CreateReportInput,
+  accessToken: string
+): Promise<Report> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/reports`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const message = await parseError(response);
+    throw new Error(message);
   }
 
   return response.json();

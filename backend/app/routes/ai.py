@@ -5,7 +5,10 @@
 # POST /ai/suggest-category: Kullanıcının yüklediği bir resmi analiz ederek, rapor için uygun bir kategori önermek için kullanılacak. Gerekli alanlar: image (dosya). Bu route, kullanıcı giriş yaptıktan sonra erişilebilir olacak.
 
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.dependencies import get_current_user
+from app.models import User
 
 router = APIRouter(
     prefix="/ai",
@@ -14,5 +17,5 @@ router = APIRouter(
 
 
 @router.post("/suggest-category")
-def suggest_category():
+def suggest_category(current_user: User = Depends(get_current_user)):
     return {"category": "road"}

@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import requests
 
 from app.database import get_db
-from app.models import Report
+from app.dependencies import get_current_user
+from app.models import Report, User
+from app.schemas import ReportCreate, ReportResponse
 
 router = APIRouter(
     prefix="/reports",
@@ -77,6 +79,28 @@ def list_reports(
         }
         for report in reports
     ]
+
+
+@router.post("/", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
+def create_report(
+    report_create: ReportCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = Report(
+        user_id=current_user.id,
+        title=report_create.title,
+        description=report_create.description,
+        category=report_create.category,
+        latitude=report_create.latitude,
+        longitude=report_create.longitude,
+    )
+
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    return report
 
 
 @router.get("/statistics")

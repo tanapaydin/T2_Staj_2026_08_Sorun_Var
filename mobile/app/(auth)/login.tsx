@@ -10,24 +10,42 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { login } from "../../lib/auth";
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const isValidEmail = (value: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Hata", "Lütfen e-posta ve şifre girin.");
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail) {
+      Alert.alert("Hata", "Lütfen e-posta girin.");
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      Alert.alert("Hata", "Lütfen geçerli bir e-posta adresi girin.");
+      return;
+    }
+
+    if (!trimmedPassword) {
+      Alert.alert("Hata", "Lütfen şifre girin.");
       return;
     }
 
     setLoading(true);
     try {
-      await login(email, password);
-      router.push("/(tabs)/map");
+      await login(trimmedEmail, trimmedPassword);
+      router.replace("/(tabs)/map");
     } catch (error) {
       Alert.alert("Giriş Başarısız", error instanceof Error ? error.message : "Bir hata oluştu.");
     } finally {
@@ -50,14 +68,27 @@ export default function LoginScreen() {
           value={email}
           onChangeText={setEmail}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Şifre"
-          placeholderTextColor="#94A3B8"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={[styles.input, styles.passwordInput]}
+            placeholder="Şifre"
+            placeholderTextColor="#94A3B8"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Pressable
+            accessibilityLabel={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+            style={styles.toggleButton}
+            onPress={() => setShowPassword((prev) => !prev)}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#64748B"
+            />
+          </Pressable>
+        </View>
 
         <Pressable style={styles.button} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Giriş Yap</Text>}
@@ -67,7 +98,7 @@ export default function LoginScreen() {
           <Text style={styles.linkText}>Hesabınız yok mu? Kayıt Ol</Text>
         </Pressable>
 
-        <Pressable onPress={() => router.push("/(tabs)/map")}> 
+        <Pressable onPress={() => router.replace("/(tabs)/map")}>
           <Text style={styles.guestText}>Misafir olarak devam et</Text>
         </Pressable>
       </View>
@@ -124,6 +155,23 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 16,
+  },
+  passwordContainer: {
+    width: "100%",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 52,
+  },
+  toggleButton: {
+    alignItems: "center",
+    height: 46,
+    justifyContent: "center",
+    position: "absolute",
+    right: 8,
+    width: 44,
   },
   linkText: {
     color: "#2563EB",

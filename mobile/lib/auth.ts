@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_CONFIG } from "../config/api";
 
 export type User = {
@@ -17,6 +18,7 @@ export type AuthResponse = {
 };
 
 const baseUrl = API_CONFIG.BASE_URL;
+const STORAGE_KEY = "SORUN_VAR_AUTH";
 
 async function parseError(response: Response) {
   try {
@@ -25,6 +27,19 @@ async function parseError(response: Response) {
   } catch {
     return "İşlem başarısız oldu.";
   }
+}
+
+export async function saveAuthData(data: AuthResponse): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+export async function getAuthData(): Promise<AuthResponse | null> {
+  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export async function clearAuthData(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY);
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
@@ -41,7 +56,9 @@ export async function login(email: string, password: string): Promise<AuthRespon
     throw new Error(message);
   }
 
-  return response.json();
+  const result = await response.json();
+  await saveAuthData(result);
+  return result;
 }
 
 export async function register(
@@ -62,5 +79,7 @@ export async function register(
     throw new Error(message);
   }
 
-  return response.json();
+  const result = await response.json();
+  await saveAuthData(result);
+  return result;
 }
