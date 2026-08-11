@@ -1,9 +1,9 @@
 import { API_CONFIG } from "../config/api";
 import { Report } from "../types/report";
 
-// --------------------------------------------------
-// REPORT FILTERS
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
+// TYPES
+// ---------------------------------------------------------------------------
 
 export type ReportFilters = {
   category?: string;
@@ -12,23 +12,68 @@ export type ReportFilters = {
   date?: "today" | "7d" | "30d";
   sort?: "newest" | "oldest" | "most_viewed";
 
+  // Pagination
   skip?: number;
   limit?: number;
 };
 
-// --------------------------------------------------
+export type CreateReportInput = {
+  title: string;
+  description: string;
+  category: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type LocationSuggestion = {
+  name: string;
+  latitude: number;
+  longitude: number;
+};
+
+export type ReportStatistics = {
+  total_reports: number;
+  resolved_reports: number;
+  pending_reports: number;
+  average_progress: number;
+  resolution_rate: number;
+};
+
+export type CategoryStatistics = {
+  category: string;
+  count: number;
+};
+
+// ---------------------------------------------------------------------------
+// HELPER
+// ---------------------------------------------------------------------------
+
+async function parseError(
+  response: Response
+): Promise<string> {
+  try {
+    const data = await response.json();
+
+    return (
+      data?.detail ||
+      data?.message ||
+      "İşlem başarısız oldu."
+    );
+  } catch {
+    return "İşlem başarısız oldu.";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // FETCH REPORTS
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
 
 export async function fetchReports(
   filters?: ReportFilters
 ): Promise<Report[]> {
   const params = new URLSearchParams();
 
-  // --------------------------------------------------
-  // Filters
-  // --------------------------------------------------
-
+  // Category
   if (
     filters?.category &&
     filters.category !== "all"
@@ -39,6 +84,7 @@ export async function fetchReports(
     );
   }
 
+  // Resolved
   if (filters?.resolved !== undefined) {
     params.append(
       "resolved",
@@ -46,6 +92,7 @@ export async function fetchReports(
     );
   }
 
+  // Priority
   if (filters?.priority) {
     params.append(
       "priority",
@@ -53,6 +100,7 @@ export async function fetchReports(
     );
   }
 
+  // Date
   if (filters?.date) {
     params.append(
       "date",
@@ -60,6 +108,7 @@ export async function fetchReports(
     );
   }
 
+  // Sorting
   if (filters?.sort) {
     params.append(
       "sort",
@@ -67,10 +116,7 @@ export async function fetchReports(
     );
   }
 
-  // --------------------------------------------------
   // Pagination
-  // --------------------------------------------------
-
   if (filters?.skip !== undefined) {
     params.append(
       "skip",
@@ -84,10 +130,6 @@ export async function fetchReports(
       String(filters.limit)
     );
   }
-
-  // --------------------------------------------------
-  // URL
-  // --------------------------------------------------
 
   const queryString =
     params.toString();
@@ -105,25 +147,19 @@ export async function fetchReports(
     url
   );
 
-  // --------------------------------------------------
-  // Request
-  // --------------------------------------------------
-
   const response = await fetch(url);
 
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const message =
+      await parseError(response);
 
     console.log(
       "FETCH REPORTS ERROR:",
       response.status,
-      errorText
+      message
     );
 
-    throw new Error(
-      `Failed to fetch reports: ${response.status}`
-    );
+    throw new Error(message);
   }
 
   const data: Report[] =
@@ -137,46 +173,98 @@ export async function fetchReports(
   return data;
 }
 
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
+// CREATE REPORT
+// ---------------------------------------------------------------------------
+
+export async function createReport(
+  input: CreateReportInput,
+  accessToken: string
+): Promise<Report> {
+  console.log(
+    "CREATE REPORT:",
+    input
+  );
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/reports`,
+    {
+      method: "POST",
+
+      headers: {
+        Authorization:
+          `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json",
+      },
+
+      body: JSON.stringify(input),
+    }
+  );
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "CREATE REPORT ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: Report =
+    await response.json();
+
+  console.log(
+    "CREATE REPORT RESULT:",
+    data
+  );
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // LOCATION SEARCH
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
 
 export async function searchLocation(
   query: string
 ) {
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/search?query=${encodeURIComponent(
-      query
-    )}`
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/search` +
+    `?query=${encodeURIComponent(query)}`;
+
+  console.log(
+    "SEARCH LOCATION:",
+    url
   );
 
+  const response =
+    await fetch(url);
+
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const message =
+      await parseError(response);
 
     console.log(
       "LOCATION SEARCH ERROR:",
       response.status,
-      errorText
+      message
     );
 
-    throw new Error(
-      `Location search failed: ${response.status}`
-    );
+    throw new Error(message);
   }
 
   return response.json();
 }
 
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
 // LOCATION SUGGESTIONS
-// --------------------------------------------------
-
-export type LocationSuggestion = {
-  name: string;
-  latitude: number;
-  longitude: number;
-};
+// ---------------------------------------------------------------------------
 
 export async function fetchLocationSuggestions(
   query: string
@@ -185,25 +273,29 @@ export async function fetchLocationSuggestions(
     return [];
   }
 
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/search/suggestions?query=${encodeURIComponent(
-      query
-    )}`
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/search/suggestions` +
+    `?query=${encodeURIComponent(query)}`;
+
+  console.log(
+    "FETCH LOCATION SUGGESTIONS:",
+    url
   );
 
+  const response =
+    await fetch(url);
+
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const message =
+      await parseError(response);
 
     console.log(
       "LOCATION SUGGESTIONS ERROR:",
       response.status,
-      errorText
+      message
     );
 
-    throw new Error(
-      `Failed to fetch location suggestions: ${response.status}`
-    );
+    throw new Error(message);
   }
 
   const data: LocationSuggestion[] =
@@ -212,17 +304,9 @@ export async function fetchLocationSuggestions(
   return data;
 }
 
-// --------------------------------------------------
-// STATISTICS
-// --------------------------------------------------
-
-export type ReportStatistics = {
-  total_reports: number;
-  resolved_reports: number;
-  pending_reports: number;
-  average_progress: number;
-  resolution_rate: number;
-};
+// ---------------------------------------------------------------------------
+// GENERAL STATISTICS
+// ---------------------------------------------------------------------------
 
 export async function fetchStatistics(): Promise<ReportStatistics> {
   const url =
@@ -237,18 +321,16 @@ export async function fetchStatistics(): Promise<ReportStatistics> {
     await fetch(url);
 
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const message =
+      await parseError(response);
 
     console.log(
       "FETCH STATISTICS ERROR:",
       response.status,
-      errorText
+      message
     );
 
-    throw new Error(
-      `Failed to fetch statistics: ${response.status}`
-    );
+    throw new Error(message);
   }
 
   const data: ReportStatistics =
@@ -262,14 +344,9 @@ export async function fetchStatistics(): Promise<ReportStatistics> {
   return data;
 }
 
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
 // CATEGORY STATISTICS
-// --------------------------------------------------
-
-export type CategoryStatistics = {
-  category: string;
-  count: number;
-};
+// ---------------------------------------------------------------------------
 
 export async function fetchCategoryStatistics(): Promise<
   CategoryStatistics[]
@@ -286,18 +363,16 @@ export async function fetchCategoryStatistics(): Promise<
     await fetch(url);
 
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const message =
+      await parseError(response);
 
     console.log(
-      "FETCH CATEGORY STATISTICS ERROR:",
+      "CATEGORY STATISTICS ERROR:",
       response.status,
-      errorText
+      message
     );
 
-    throw new Error(
-      `Failed to fetch category statistics: ${response.status}`
-    );
+    throw new Error(message);
   }
 
   const data: CategoryStatistics[] =
