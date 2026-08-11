@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { register } from "../../lib/auth";
 
 export default function RegisterScreen() {
@@ -17,18 +18,46 @@ export default function RegisterScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const isValidEmail = (value: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
   const handleRegister = async () => {
-    if (!name || !email || !password) {
-      Alert.alert("Hata", "Lütfen tüm alanları doldurun.");
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedName) {
+      Alert.alert("Hata", "Lütfen adınızı girin.");
+      return;
+    }
+
+    if (!trimmedEmail) {
+      Alert.alert("Hata", "Lütfen e-posta girin.");
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      Alert.alert("Hata", "Lütfen geçerli bir e-posta adresi girin.");
+      return;
+    }
+
+    if (!trimmedPassword) {
+      Alert.alert("Hata", "Lütfen şifrenizi girin.");
+      return;
+    }
+
+    if (trimmedPassword.length < 8) {
+      Alert.alert("Hata", "Şifre en az 8 karakter olmalıdır.");
       return;
     }
 
     setLoading(true);
     try {
-      await register(name, email, password);
-      router.push("/(tabs)/map");
+      await register(trimmedName, trimmedEmail, trimmedPassword);
+      router.replace("/(tabs)/map");
     } catch (error) {
       Alert.alert("Kayıt Başarısız", error instanceof Error ? error.message : "Bir hata oluştu.");
     } finally {
@@ -58,14 +87,27 @@ export default function RegisterScreen() {
           value={email}
           onChangeText={setEmail}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Şifre"
-          placeholderTextColor="#94A3B8"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={[styles.input, styles.passwordInput]}
+            placeholder="Şifre"
+            placeholderTextColor="#94A3B8"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Pressable
+            accessibilityLabel={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+            style={styles.toggleButton}
+            onPress={() => setShowPassword((prev) => !prev)}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#64748B"
+            />
+          </Pressable>
+        </View>
 
         <Pressable style={styles.button} onPress={handleRegister} disabled={loading}>
           {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Kayıt Ol</Text>}
@@ -75,7 +117,7 @@ export default function RegisterScreen() {
           <Text style={styles.linkText}>Zaten hesabın var mı? Giriş Yap</Text>
         </Pressable>
 
-        <Pressable onPress={() => router.push("/(tabs)/map")}> 
+        <Pressable onPress={() => router.replace("/(tabs)/map")}>
           <Text style={styles.guestText}>Misafir olarak devam et</Text>
         </Pressable>
       </View>
@@ -132,6 +174,23 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 16,
+  },
+  passwordContainer: {
+    width: "100%",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 52,
+  },
+  toggleButton: {
+    alignItems: "center",
+    height: 46,
+    justifyContent: "center",
+    position: "absolute",
+    right: 8,
+    width: 44,
   },
   linkText: {
     color: "#2563EB",

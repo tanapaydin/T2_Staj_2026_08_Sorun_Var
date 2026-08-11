@@ -1,9 +1,32 @@
-﻿import { View, Text, Pressable, StyleSheet} from "react-native";
+﻿import { useEffect, useState } from "react";
+import { View, Text, Pressable, StyleSheet} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { getAuthData } from "../lib/auth";
 
 export default function Index() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const auth = await getAuthData();
+      if (auth?.access_token) {
+        router.replace("/(tabs)/map");
+      } else {
+        setLoading(false);
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Yükleniyor...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -18,7 +41,7 @@ export default function Index() {
         <Text style={styles.secondaryButtonText}>Kayıt Ol</Text>
       </Pressable>
 
-      <Pressable style={styles.guestButton} onPress={() => router.push("/(tabs)/map")}> 
+      <Pressable style={styles.guestButton} onPress={() => router.replace("/(tabs)/map")}>
         <Text style={styles.guestButtonText}>Misafir Olarak Devam Et</Text>
       </Pressable>
     </SafeAreaView>

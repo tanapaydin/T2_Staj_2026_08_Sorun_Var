@@ -12,7 +12,7 @@ email-validator
 
 # Authentication
 passlib[bcrypt]
-bcrypt
+bcrypt<5
 python-jose[cryptography]
 
 # File upload

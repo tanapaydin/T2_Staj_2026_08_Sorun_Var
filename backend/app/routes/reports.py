@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
 
 from app.database import get_db
-from app.models import Report
+from app.dependencies import get_current_user
+from app.models import Report, User
+from app.schemas import ReportCreate, ReportResponse
 
 
 router = APIRouter(
