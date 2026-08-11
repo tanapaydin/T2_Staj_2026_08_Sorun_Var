@@ -21,3 +21,4 @@ python-multipart
 # External services
 supabase
 openai
+google-genai
