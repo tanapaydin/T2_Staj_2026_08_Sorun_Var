@@ -74,6 +74,36 @@ export function useMapCityFilter(
     setCityFilterMode("all");
     setShowSearchAreaButton(false);
   }
+  function handleRegionCity(city: string) {
+    if (
+      cityFilterMode === "search" &&
+      city !== searchedCity
+    ) {
+      setSearchedCity(city);
+      setShowSearchAreaButton(true);
+      return;
+    }
+
+    if (
+      cityFilterMode === "current" &&
+      city !== currentCity
+    ) {
+      setSearchedCity(city);
+      setShowSearchAreaButton(true);
+      return;
+    }
+
+    if (
+      cityFilterMode === "all" &&
+      city !== searchedCity
+    ) {
+      setSearchedCity(city);
+      setShowSearchAreaButton(true);
+      return;
+    }
+
+    setShowSearchAreaButton(false);
+  }
 
   return {
     cityFilterMode,
@@ -85,6 +115,7 @@ export function useMapCityFilter(
     visibleReports,
 
     handleSearchCity,
+    handleRegionCity,
     showSearchArea,
     showCurrentCity,
     showAllCities,

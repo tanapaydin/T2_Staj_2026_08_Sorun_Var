@@ -9,6 +9,16 @@ import {
   View,
 } from "react-native";
 
+import CategoryChart from "../../components/home/CategoryChart";
+
+import {
+  categoryLabels,
+  statusLabels,
+  priorityLabels,
+} from "../../constants/report";
+
+import { Colors } from "../../theme/colors";
+
 import {
   fetchReports,
   fetchStatistics,
@@ -16,231 +26,422 @@ import {
   ReportStatistics,
   CategoryStatistics,
 } from "../../lib/api";
+
 import { Report } from "../../types/report";
 
-const categoryLabels: Record<string, string> = {
-  road: "Yol",
-  trash: "Çöp",
-  lighting: "Aydınlatma",
-  construction: "İnşaat",
-  water: "Su",
-  park: "Park",
-  traffic: "Trafik",
-  noise: "Gürültü",
-  animal: "Hayvan",
-  other: "Diğer",
-};
-
-const categoryColors: Record<string, string> = {
-  road: "#EF4444",
-  trash: "#22C55E",
-  lighting: "#F59E0B",
-  construction: "#64748B",
-  water: "#2563EB",
-  park: "#16A34A",
-  traffic: "#7C3AED",
-  noise: "#DB2777",
-  animal: "#92400E",
-  other: "#475569",
-};
-
 export default function HomeScreen() {
+  const REPORTS_PER_PAGE = 10;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const [stats, setStats] = useState<ReportStatistics | null>(null);
+
   const [categories, setCategories] = useState<CategoryStatistics[]>([]);
+
   const [reports, setReports] = useState<Report[]>([]);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // =========================================================
+  // İLK VERİLERİ YÜKLE
+  // =========================================================
+
   async function loadData() {
     try {
-      const [statistics, categoryStats, reportList] =
-        await Promise.all([
-          fetchStatistics(),
-          fetchCategoryStatistics(),
-          fetchReports(),
-        ]);
+      const [
+        statistics,
+        categoryStats,
+        reportList,
+      ] = await Promise.all([
+        fetchStatistics(),
+
+        fetchCategoryStatistics(),
+
+        fetchReports({
+          skip: 0,
+          limit: REPORTS_PER_PAGE,
+          sort: "newest",
+        }),
+      ]);
+
+      console.log(
+        "İLK GELEN RAPOR SAYISI:",
+        reportList.length
+      );
 
       setStats(statistics);
       setCategories(categoryStats);
+
+      // İlk sayfayı tamamen yenile
       setReports(reportList);
+
+      setHasMore(
+        reportList.length >=
+          REPORTS_PER_PAGE
+      );
     } catch (error) {
-      console.log(error);
+      console.log(
+        "Home data error:",
+        error
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }
 
+  // =========================================================
+  // REFRESH
+  // =========================================================
+
   function onRefresh() {
     setRefreshing(true);
+    setLoadingMore(false);
+    setHasMore(true);
+
     loadData();
   }
+
+  // =========================================================
+  // DAHA FAZLA RAPOR YÜKLE (Cursor Pagination)
+  // =========================================================
+
+  async function loadMoreReports() {
+    if (loadingMore || !hasMore) {
+      return;
+    }
+
+    try {
+      setLoadingMore(true);
+
+      console.log("Daha fazla rapor isteniyor. Skip:", reports.length);
+
+      const nextReports = await fetchReports({
+        skip: reports.length,
+        limit: REPORTS_PER_PAGE,
+        sort: "newest",
+      });
+
+      console.log(
+        "SONRAKİ GELEN RAPOR SAYISI:",
+        nextReports.length
+      );
+
+      // Gelen raporları doğrudan mevcut listeye ekle
+      setReports((currentReports) => [
+        ...currentReports,
+        ...nextReports,
+      ]);
+
+      // Backend limitten az kayıt döndürdüyse artık veri bitmiştir
+      if (nextReports.length < REPORTS_PER_PAGE) {
+        console.log("Tüm raporlar yüklendi.");
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.log("Load more reports error:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  // =========================================================
+  // İLK SAYFA LOADING
+  // =========================================================
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563EB" />
-        <Text style={styles.loadingText}>
-          Veriler yükleniyor...
-        </Text>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Veriler yükleniyor...</Text>
       </View>
     );
   }
 
-  const maxCategoryCount =
-    categories.length > 0
-      ? Math.max(...categories.map((c) => c.count))
-      : 1;
+  const totalReports = stats?.total_reports ?? 0;
+  const resolutionRate = stats?.resolution_rate ?? 0;
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-        />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
+      showsVerticalScrollIndicator={false}
+      onMomentumScrollEnd={({ nativeEvent }) => {
+        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+
+        const distanceFromBottom =
+          contentSize.height -
+          (layoutMeasurement.height + contentOffset.y);
+
+        console.log("BOTTOM MESAFESİ:", distanceFromBottom);
+
+        // Sayfanın sonuna yaklaşıldıysa
+        if (distanceFromBottom < 100 && !loadingMore && hasMore) {
+          console.log("Daha Fazla Rapor Yükleniyor...");
+          loadMoreReports();
+        }
+      }}
     >
-      {/* Başlık */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Sorun Var</Text>
-        <Text style={styles.subtitle}>
-          Belediye İstatistikleri
-        </Text>
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+
+      <View style={styles.hero}>
+        <View style={styles.heroContent}>
+          <Text style={styles.heroTitle}>Sorun Var</Text>
+
+          <Text style={styles.heroSubtitle}>
+            Şehrinizdeki sorunları takip edin, değişimi birlikte görün.
+          </Text>
+
+          <View style={styles.heroStats}>
+            <View>
+              <Text style={styles.heroNumber}>{totalReports}</Text>
+              <Text style={styles.heroLabel}>toplam bildirim</Text>
+            </View>
+
+            <View style={styles.heroDivider} />
+
+            <View>
+              <Text style={styles.heroNumber}>
+                %{Math.round(resolutionRate)}
+              </Text>
+
+              <Text style={styles.heroLabel}>çözüm oranı</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
-      {/* İstatistik Kartları */}
+      {/* =====================================================
+          STATISTICS
+      ===================================================== */}
+
       <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>
-            Toplam Bildirim
-          </Text>
+        <View style={[styles.statCard, styles.statCardBlue]}>
+          <View style={styles.statAccent} />
+          <Text style={styles.statLabel}>Toplam Bildirim</Text>
           <Text style={styles.statValue}>
             {stats?.total_reports ?? 0}
           </Text>
         </View>
 
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>
-            Çözülen
-          </Text>
+        <View style={[styles.statCard, styles.statCardGreen]}>
+          <View style={styles.statAccent} />
+          <Text style={styles.statLabel}>Çözülen</Text>
           <Text style={styles.statValue}>
             {stats?.resolved_reports ?? 0}
           </Text>
         </View>
 
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>
-            Bekleyen
-          </Text>
+        <View style={[styles.statCard, styles.statCardOrange]}>
+          <View style={styles.statAccent} />
+          <Text style={styles.statLabel}>Bekleyen</Text>
           <Text style={styles.statValue}>
             {stats?.pending_reports ?? 0}
           </Text>
         </View>
 
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>
-            Ortalama İlerleme
-          </Text>
+        <View style={[styles.statCard, styles.statCardPurple]}>
+          <View style={styles.statAccent} />
+          <Text style={styles.statLabel}>Ortalama İlerleme</Text>
           <Text style={styles.statValue}>
-            %{stats?.average_progress ?? 0}
+            %{Math.round(stats?.average_progress ?? 0)}
           </Text>
         </View>
       </View>
 
-      {/* Kategori Dağılımı */}
+      {/* =====================================================
+          CATEGORY DISTRIBUTION
+      ===================================================== */}
+
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Kategori Dağılımı
-        </Text>
-
-        {categories.map((category) => (
-          <View
-            key={category.category}
-            style={styles.categoryRow}
-          >
-            <Text style={styles.categoryLabel}>
-              {categoryLabels[category.category] ??
-                category.category}
-            </Text>
-
-            <View style={styles.barContainer}>
-              <View
-                style={[
-                  styles.bar,
-                  {
-                    width: `${(category.count / maxCategoryCount) * 100}%`,
-                    backgroundColor:
-                      categoryColors[category.category] ??
-                      "#475569",
-                  },
-                ]}
-              />
-            </View>
-
-            <Text style={styles.categoryCount}>
-              {category.count}
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Kategori Dağılımı</Text>
+            <Text style={styles.sectionSubtitle}>
+              Bildirimlerin kategorilere göre dağılımı
             </Text>
           </View>
-        ))}
+        </View>
+
+        <CategoryChart categories={categories} total={totalReports} />
       </View>
 
-      {/* Son Bildirilen Sorunlar */}
+      {/* =====================================================
+          RESOLUTION
+      ===================================================== */}
+
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Son Bildirilen Sorunlar
-        </Text>
-
-        {reports.map((report) => (
-          <TouchableOpacity
-            key={report.id}
-            style={styles.reportCard}
-            activeOpacity={0.8}
-          >
-            <View style={styles.reportHeader}>
-              <View
-                style={[
-                  styles.categoryBadge,
-                  {
-                    backgroundColor:
-                      categoryColors[report.category] ??
-                      "#475569",
-                  },
-                ]}
-              >
-                <Text style={styles.categoryBadgeText}>
-                  {categoryLabels[report.category] ??
-                    report.category}
-                </Text>
-              </View>
-
-              <Text style={styles.reportStatus}>
-                {report.status}
+        <View style={styles.resolutionCard}>
+          <View style={styles.resolutionHeader}>
+            <View>
+              <Text style={styles.resolutionTitle}>Çözüm Durumu</Text>
+              <Text style={styles.resolutionSubtitle}>
+                Bildirimlerin ne kadarı çözüldü?
               </Text>
             </View>
 
-            <Text style={styles.reportTitle}>
-              {report.title}
+            <Text style={styles.resolutionValue}>
+              %{Math.round(resolutionRate)}
+            </Text>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.min(
+                    Math.max(resolutionRate, 0),
+                    100
+                  )}%`,
+                },
+              ]}
+            />
+          </View>
+
+          <View style={styles.resolutionFooter}>
+            <Text style={styles.resolutionFooterText}>
+              {stats?.resolved_reports ?? 0} çözülen
             </Text>
 
-            <View style={styles.reportFooter}>
-              <Text style={styles.reportPriority}>
-                Öncelik: {report.priority}
+            <Text style={styles.resolutionFooterText}>
+              {stats?.pending_reports ?? 0} bekleyen
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* =====================================================
+          RECENT REPORTS
+      ===================================================== */}
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Son Bildirilen Sorunlar</Text>
+            <Text style={styles.sectionSubtitle}>
+              En son eklenen bildirimler
+            </Text>
+          </View>
+        </View>
+
+        {reports.map((report) => {
+          const priorityColor =
+            Colors.priority[
+              report.priority as keyof typeof Colors.priority
+            ] ?? Colors.textMuted;
+
+          return (
+            <TouchableOpacity
+              key={report.id}
+              style={styles.reportCard}
+              activeOpacity={0.8}
+            >
+              <View style={styles.reportTopRow}>
+                <View
+                  style={[
+                    styles.categoryBadge,
+                    {
+                      backgroundColor:
+                        Colors.category[
+                          report.category as keyof typeof Colors.category
+                        ] ?? Colors.category.other,
+                    },
+                  ]}
+                >
+                  <Text style={styles.categoryBadgeText}>
+                    {categoryLabels[report.category] ?? report.category}
+                  </Text>
+                </View>
+
+                <View style={styles.statusContainer}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor:
+                          report.status === "resolved"
+                            ? Colors.success
+                            : report.status === "in_progress"
+                            ? Colors.warning
+                            : Colors.border,
+                      },
+                    ]}
+                  />
+
+                  <Text style={styles.reportStatus}>
+                    {statusLabels[report.status] ?? report.status}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={styles.reportTitle}
+                numberOfLines={2}
+              >
+                {report.title}
               </Text>
 
-              <Text style={styles.reportViews}>
-                {report.view_count} görüntülenme
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.reportFooter}>
+                <View style={styles.priorityContainer}>
+                  <View
+                    style={[
+                      styles.priorityDot,
+                      {
+                        backgroundColor: priorityColor,
+                      },
+                    ]}
+                  />
+
+                  <Text style={styles.reportPriority}>
+                    Öncelik:{" "}
+                    {priorityLabels[report.priority] ?? report.priority}
+                  </Text>
+                </View>
+
+                <Text style={styles.reportViews}>
+                  {report.view_count} görüntülenme
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* ===================================================
+            LOAD MORE SPINNER
+        =================================================== */}
+
+        {loadingMore && (
+          <View style={styles.loadMoreContainer}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.loadMoreText}>
+              Daha fazla bildirim yükleniyor...
+            </Text>
+          </View>
+        )}
+
+        {/* ===================================================
+            LİSTE BİTTİ
+        =================================================== */}
+
+        {!hasMore && reports.length > 0 && (
+          <View style={styles.endContainer}>
+            <Text style={styles.endText}>
+              Tüm bildirimler gösteriliyor.
+            </Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -249,12 +450,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.background,
   },
 
   content: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 48,
     paddingBottom: 40,
   },
 
@@ -262,7 +463,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.background,
   },
 
   loadingText: {
@@ -271,21 +472,60 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  header: {
-    marginBottom: 24,
+  /* HERO */
+
+  hero: {
+    backgroundColor: Colors.heroBackground,
+    borderRadius: 28,
+    marginBottom: 20,
+    overflow: "hidden",
+    elevation: 5,
   },
 
-  title: {
+  heroContent: {
+    padding: 24,
+  },
+
+  heroTitle: {
+    color: Colors.heroText,
     fontSize: 32,
     fontWeight: "800",
-    color: "#0F172A",
   },
 
-  subtitle: {
-    marginTop: 4,
-    fontSize: 16,
+  heroSubtitle: {
     color: "#64748B",
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 6,
+    maxWidth: 320,
   },
+
+  heroStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 24,
+  },
+
+  heroNumber: {
+    color: Colors.primary,
+    fontSize: 24,
+    fontWeight: "800",
+  },
+
+  heroLabel: {
+    color: "#64748B",
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  heroDivider: {
+    width: 1,
+    height: 42,
+    backgroundColor: Colors.heroDivider,
+    marginHorizontal: 24,
+  },
+
+  /* STATS */
 
   statsGrid: {
     flexDirection: "row",
@@ -296,16 +536,40 @@ const styles = StyleSheet.create({
 
   statCard: {
     width: "48%",
-    backgroundColor: "white",
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 18,
     marginBottom: 14,
-    elevation: 3,
+    elevation: 1,
+    overflow: "hidden",
+  },
+
+  statAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+
+  statCardBlue: {
+    backgroundColor: Colors.statCard.blue,
+  },
+
+  statCardGreen: {
+    backgroundColor: Colors.statCard.green,
+  },
+
+  statCardOrange: {
+    backgroundColor: Colors.statCard.orange,
+  },
+
+  statCardPurple: {
+    backgroundColor: Colors.statCard.purple,
   },
 
   statLabel: {
     color: "#64748B",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
 
@@ -316,103 +580,195 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
 
+  /* SECTIONS */
+
   section: {
     marginBottom: 28,
   },
 
+  sectionHeader: {
+    marginBottom: 14,
+  },
+
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: "800",
     color: "#0F172A",
-    marginBottom: 16,
   },
 
-  categoryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
+  sectionSubtitle: {
+    marginTop: 4,
+    color: "#64748B",
+    fontSize: 13,
   },
 
-  categoryLabel: {
-    width: 90,
-    fontSize: 14,
-    color: "#334155",
-    fontWeight: "600",
+  /* RESOLUTION */
+
+  resolutionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    elevation: 2,
   },
 
-  barContainer: {
-    flex: 1,
-    height: 10,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 999,
-    overflow: "hidden",
-    marginHorizontal: 10,
-  },
-
-  bar: {
-    height: "100%",
-    borderRadius: 999,
-  },
-
-  categoryCount: {
-    width: 32,
-    textAlign: "right",
-    color: "#475569",
-    fontWeight: "700",
-  },
-
-  reportCard: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
-    elevation: 3,
-  },
-
-  reportHeader: {
+  resolutionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+
+  resolutionTitle: {
+    color: "#0F172A",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+
+  resolutionSubtitle: {
+    color: "#64748B",
+    fontSize: 13,
+    marginTop: 3,
+  },
+
+  resolutionValue: {
+    color: Colors.resolution.text,
+    fontSize: 24,
+    fontWeight: "800",
+  },
+
+  progressTrack: {
+    height: 10,
+    backgroundColor: Colors.resolution.track,
+    borderRadius: 999,
+    overflow: "hidden",
+    marginTop: 18,
+  },
+
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#86C99E",
+    borderRadius: 999,
+  },
+
+  resolutionFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+
+  resolutionFooterText: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  /* REPORTS */
+
+  reportCard: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 17,
     marginBottom: 12,
+    elevation: 2,
+  },
+
+  reportTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 11,
   },
 
   categoryBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 999,
   },
 
   categoryBadgeText: {
     color: "white",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 11,
+  },
+
+  statusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 6,
   },
 
   reportStatus: {
     color: "#64748B",
+    fontSize: 12,
     fontWeight: "600",
-    textTransform: "capitalize",
   },
 
   reportTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
     color: "#0F172A",
-    marginBottom: 12,
+    lineHeight: 22,
+    marginBottom: 13,
   },
 
   reportFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  priorityContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  priorityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 6,
   },
 
   reportPriority: {
     color: "#475569",
+    fontSize: 12,
     fontWeight: "600",
   },
 
   reportViews: {
-    color: "#64748B",
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  /* LOAD MORE */
+
+  loadMoreContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+  },
+
+  loadMoreText: {
+    marginTop: 8,
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  endContainer: {
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+
+  endText: {
+    color: Colors.textMuted,
+    fontSize: 12,
     fontWeight: "600",
   },
 });

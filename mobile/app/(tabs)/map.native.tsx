@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Platform, StyleSheet, View, ActivityIndicator } from "react-native";
+import { Platform, StyleSheet, View, ActivityIndicator, Pressable } from "react-native";
 
 import { useReports } from "../../hooks/useReports";
 import CitySummaryCard from "../../components/map/CitySummaryCard";
@@ -54,8 +54,8 @@ export default function MapScreen() {
   const [region, setRegion] = useState({
     latitude: 39.925,
     longitude: 32.8369,
-    latitudeDelta: 0.12,
-    longitudeDelta: 0.12,
+    latitudeDelta: 1.2,
+    longitudeDelta: 1.2, 
   });
   const {
     reports,
@@ -69,6 +69,7 @@ export default function MapScreen() {
     visibleReports,
     showSearchAreaButton,
     handleSearchCity,
+    handleRegionCity,
     showSearchArea,
     showCurrentCity,
     showAllCities,
@@ -91,26 +92,22 @@ export default function MapScreen() {
   >(undefined);
 
   useEffect(() => {
-    if (reports.length > 0 && !isWeb) {
-      setTimeout(() => {
-        mapRef.current?.fitToCoordinates(
-          reports.map((r) => ({
-            latitude: r.latitude,
-            longitude: r.longitude,
-          })),
-          {
-            edgePadding: {
-              top: 180,
-              right: 60,
-              bottom: 250,
-              left: 60,
-            },
-            animated: true,
-          }
-        );
-      }, 300);
-    }
-  }, [reports]);
+    if (!userLocation || isWeb) return;
+
+    const timer = setTimeout(() => {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          latitudeDelta: 0.04,
+          longitudeDelta: 0.04,
+        },
+        2000
+      );
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [userLocation]);
 
   useEffect(() => {
     const timeout = setTimeout(async () => {
@@ -134,11 +131,7 @@ export default function MapScreen() {
     setSearch(item.name);
     setSuggestions([]);
 
-    const city = detectCity(
-      item.latitude,
-      item.longitude
-    );
-
+    const city = detectCity(item.latitude, item.longitude);
     handleSearchCity(city);
 
     if (!isWeb) {
@@ -236,7 +229,7 @@ export default function MapScreen() {
       {showSearchAreaButton && (
         <View style={styles.searchAreaButtonContainer}>
           <AppButton
-            title="Bu çevredeki şikayetleri göster"
+            title="Bu bölgedeki şikayetleri göster"
             onPress={showSearchArea}
           />
         </View>
@@ -244,12 +237,37 @@ export default function MapScreen() {
 
       {/* Filtre */}
       <View style={styles.filterBar}>
-        <AppButton
-          title="Filtre"
-          variant="secondary"
-          onPress={() => setFilterVisible(true)}
-          style={styles.filterButton}
-        />
+        <View style={styles.filterRow}>
+          <AppButton
+            title="Filtre"
+            variant="secondary"
+            onPress={() => setFilterVisible(true)}
+            style={styles.filterButton}
+          />
+
+          {cityFilterMode === "search" && (
+            <Pressable
+              onPress={showCurrentCity}
+              style={styles.searchModeButton}
+            >
+              <AppText
+                variant="bodyMedium"
+                color={Colors.textSecondary}
+                style={styles.searchModeText}
+              >
+                Bölgede arama
+              </AppText>
+
+              <AppText
+                variant="bodyMedium"
+                color={Colors.textSecondary}
+                style={styles.searchModeClose}
+              >
+                ×
+              </AppText>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Harita */}
@@ -278,7 +296,23 @@ export default function MapScreen() {
           ref={mapRef}
           style={styles.map}
           initialRegion={region}
-          onRegionChangeComplete={setRegion}
+          onRegionChangeComplete={(
+            newRegion: {
+              latitude: number;
+              longitude: number;
+              latitudeDelta: number;
+              longitudeDelta: number;
+            }
+          ) => {
+            setRegion(newRegion);
+
+            const city = detectCity(
+              newRegion.latitude,
+              newRegion.longitude
+            );
+
+            handleRegionCity(city);
+          }}
         >
           <MapMarkers
             reports={visibleReports}
@@ -379,17 +413,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  filterBar: {
-    position: "absolute",
-    top: 120,
-    left: 20,
-    right: 20,
-    zIndex: 18,
-  },
 
-  filterButton: {
-    alignSelf: "flex-start",
-  },
 
   loadingOverlay: {
     position: "absolute",
@@ -444,5 +468,44 @@ searchAreaButtonContainer: {
   alignItems: "center",
   zIndex: 1000,
   elevation: 10,
+},
+filterBar: {
+  position: "absolute",
+  top: 120,
+  left: 20,
+  right: 20,
+  zIndex: 18,
+},
+
+filterRow: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+filterButton: {
+  alignSelf: "flex-start",
+},
+
+searchModeButton: {
+  marginLeft: 8,
+  height: 40,
+  paddingLeft: 14,
+  paddingRight: 10,
+  borderRadius: 20,
+  backgroundColor: "rgba(255, 255, 255, 0.82)",
+  borderWidth: 1,
+  borderColor: "rgba(0, 0, 0, 0.08)",
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+searchModeText: {
+  fontSize: 13,
+},
+
+searchModeClose: {
+  marginLeft: 8,
+  fontSize: 18,
+  lineHeight: 20,
 },
 });

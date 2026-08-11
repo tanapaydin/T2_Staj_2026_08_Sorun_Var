@@ -5,10 +5,10 @@ export const Colors = {
   primaryLight: "#DBEAFE",
 
   // Status
-  success: "#22C55E",
-  warning: "#F59E0B",
-  danger: "#EF4444",
-  info: "#0EA5E9",
+  success: "#86C99E",
+  warning: "#F2C96D",
+  danger: "#FCA5A5",
+  info: "#93C5FD",
 
   // Backgrounds
   background: "#F8FAFC",
@@ -25,17 +25,46 @@ export const Colors = {
   border: "#E2E8F0",
   borderLight: "#F1F5F9",
 
-  // Map categories
-  road: "#EF4444",
-  trash: "#22C55E",
-  lighting: "#F59E0B",
-  construction: "#64748B",
-  water: "#2563EB",
-  park: "#16A34A",
-  traffic: "#7C3AED",
-  noise: "#DB2777",
-  animal: "#92400E",
-  other: "#475569",
+  // Home
+  heroBackground: "#E8F1FF",
+  heroText: "#1E3A5F",
+  heroDivider: "#BFDBFE",
+
+  // Category colors
+  category: {
+    road: "#FCA5A5",
+    trash: "#86EFAC",
+    lighting: "#FCD34D",
+    construction: "#CBD5E1",
+    water: "#93C5FD",
+    park: "#A7F3D0",
+    traffic: "#C4B5FD",
+    noise: "#F9A8D4",
+    animal: "#D6B48A",
+    other: "#94A3B8",
+  },
+
+  // Priority colors
+  priority: {
+    high: "#FCA5A5",
+    medium: "#FCD34D",
+    low: "#86EFAC",
+  },
+
+  // Stat cards
+  statCard: {
+    blue: "#F0F6FF",
+    green: "#F0FDF4",
+    orange: "#FFFBEB",
+    purple: "#F5F3FF",
+  },
+
+  // Resolution
+  resolution: {
+    text: "#4D8B68",
+    track: "#E8F5EC",
+    fill: "#86C99E",
+  },
 } as const;
 
 export type ColorKey = keyof typeof Colors;
