@@ -42,23 +42,66 @@ export async function clearAuthData(): Promise<void> {
   await AsyncStorage.removeItem(STORAGE_KEY);
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  const response = await fetch(`${baseUrl}/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
+export async function login(
+  email: string,
+  password: string
+): Promise<AuthResponse> {
+  const url = `${baseUrl}/auth/login`;
 
-  if (!response.ok) {
-    const message = await parseError(response);
-    throw new Error(message);
+  console.log("========== LOGIN START ==========");
+  console.log("LOGIN URL:", url);
+  console.log("LOGIN EMAIL:", email);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    });
+
+    console.log("LOGIN STATUS:", response.status);
+
+    const responseText = await response.text();
+
+    console.log("LOGIN RESPONSE:", responseText);
+
+    if (!response.ok) {
+      let message = "Giriş başarısız oldu.";
+
+      try {
+        const data = JSON.parse(responseText);
+        message =
+          data?.detail ||
+          data?.message ||
+          message;
+      } catch {
+        if (responseText) {
+          message = responseText;
+        }
+      }
+
+      throw new Error(message);
+    }
+
+    const result: AuthResponse =
+      JSON.parse(responseText);
+
+    console.log("LOGIN SUCCESS:", result);
+
+    await saveAuthData(result);
+
+    return result;
+  } catch (error) {
+    console.log("========== LOGIN ERROR ==========");
+    console.log(error);
+
+    throw error;
   }
-
-  const result = await response.json();
-  await saveAuthData(result);
-  return result;
 }
 
 export async function register(
@@ -66,20 +109,61 @@ export async function register(
   email: string,
   password: string
 ): Promise<AuthResponse> {
-  const response = await fetch(`${baseUrl}/auth/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name, email, password }),
-  });
+  const url = `${baseUrl}/auth/register`;
 
-  if (!response.ok) {
-    const message = await parseError(response);
-    throw new Error(message);
+  console.log("========== REGISTER START ==========");
+  console.log("REGISTER URL:", url);
+  console.log("REGISTER EMAIL:", email);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+      }),
+    });
+
+    console.log("REGISTER STATUS:", response.status);
+
+    const responseText = await response.text();
+
+    console.log("REGISTER RESPONSE:", responseText);
+
+    if (!response.ok) {
+      let message = "Kayıt başarısız oldu.";
+
+      try {
+        const data = JSON.parse(responseText);
+        message =
+          data?.detail ||
+          data?.message ||
+          message;
+      } catch {
+        if (responseText) {
+          message = responseText;
+        }
+      }
+
+      throw new Error(message);
+    }
+
+    const result: AuthResponse =
+      JSON.parse(responseText);
+
+    console.log("REGISTER SUCCESS:", result);
+
+    await saveAuthData(result);
+
+    return result;
+  } catch (error) {
+    console.log("========== REGISTER ERROR ==========");
+    console.log(error);
+
+    throw error;
   }
-
-  const result = await response.json();
-  await saveAuthData(result);
-  return result;
 }
