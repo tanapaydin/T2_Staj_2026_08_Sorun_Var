@@ -173,6 +173,30 @@ export async function fetchReports(
   return data;
 }
 
+export async function fetchAllReports(
+  filters?: ReportFilters
+): Promise<Report[]> {
+  const reports: Report[] = [];
+  const limit = 50;
+  let skip = 0;
+
+  while (true) {
+    const page = await fetchReports({
+      ...filters,
+      skip,
+      limit,
+    });
+
+    reports.push(...page);
+
+    if (page.length < limit) {
+      return reports;
+    }
+
+    skip += page.length;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CREATE REPORT
 // ---------------------------------------------------------------------------
