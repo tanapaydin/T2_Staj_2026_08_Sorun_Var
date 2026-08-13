@@ -1,27 +1,27 @@
-import { Colors } from "../theme";
+import { Colors } from "../theme/colors";
 
 export function getMarkerColor(category: string) {
   switch (category) {
     case "road":
-      return Colors.road;
+      return Colors.category.road;
     case "trash":
-      return Colors.trash;
+      return Colors.category.trash;
     case "lighting":
-      return Colors.lighting;
+      return Colors.category.lighting;
     case "construction":
-      return Colors.construction;
+      return Colors.category.construction;
     case "water":
-      return Colors.water;
+      return Colors.category.water;
     case "park":
-      return Colors.park;
+      return Colors.category.park;
     case "traffic":
-      return Colors.traffic;
+      return Colors.category.traffic;
     case "noise":
-      return Colors.noise;
+      return Colors.category.noise;
     case "animal":
-      return Colors.animal;
+      return Colors.category.animal;
     default:
-      return Colors.other;
+      return Colors.category.other;
   }
 }
 

@@ -1,5 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_CONFIG } from "../config/api";
-import * as SecureStore from "expo-secure-store";
 
 export type User = {
   id: string;
@@ -18,9 +18,7 @@ export type AuthResponse = {
 };
 
 const baseUrl = API_CONFIG.BASE_URL;
-
-const TOKEN_KEY = "access_token";
-const USER_KEY = "current_user";
+const STORAGE_KEY = "SORUN_VAR_AUTH";
 
 async function parseError(response: Response) {
   try {
@@ -31,29 +29,79 @@ async function parseError(response: Response) {
   }
 }
 
+export async function saveAuthData(data: AuthResponse): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+export async function getAuthData(): Promise<AuthResponse | null> {
+  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export async function clearAuthData(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
 export async function login(
   email: string,
   password: string
 ): Promise<AuthResponse> {
-  const response = await fetch(`${baseUrl}/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  const url = `${baseUrl}/auth/login`;
 
-  if (!response.ok) {
-    const message = await parseError(response);
-    throw new Error(message);
+  console.log("========== LOGIN START ==========");
+  console.log("LOGIN URL:", url);
+  console.log("LOGIN EMAIL:", email);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    });
+
+    console.log("LOGIN STATUS:", response.status);
+
+    const responseText = await response.text();
+
+    console.log("LOGIN RESPONSE:", responseText);
+
+    if (!response.ok) {
+      let message = "Giriş başarısız oldu.";
+
+      try {
+        const data = JSON.parse(responseText);
+        message =
+          data?.detail ||
+          data?.message ||
+          message;
+      } catch {
+        if (responseText) {
+          message = responseText;
+        }
+      }
+
+      throw new Error(message);
+    }
+
+    const result: AuthResponse =
+      JSON.parse(responseText);
+
+    console.log("LOGIN SUCCESS:", result);
+
+    await saveAuthData(result);
+
+    return result;
+  } catch (error) {
+    console.log("========== LOGIN ERROR ==========");
+    console.log(error);
+
+    throw error;
   }
-
-  const data: AuthResponse = await response.json();
-
-  await SecureStore.setItemAsync(TOKEN_KEY, data.access_token);
-  await SecureStore.setItemAsync(USER_KEY, JSON.stringify(data.user));
-
-  return data;
 }
 
 export async function register(
@@ -61,41 +109,61 @@ export async function register(
   email: string,
   password: string
 ): Promise<AuthResponse> {
-  const response = await fetch(`${baseUrl}/auth/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name, email, password }),
-  });
+  const url = `${baseUrl}/auth/register`;
 
-  if (!response.ok) {
-    const message = await parseError(response);
-    throw new Error(message);
-  }
-
-  return response.json();
-}
-
-export async function getAccessToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
-}
-
-export async function getCurrentUser(): Promise<User | null> {
-  const user = await SecureStore.getItemAsync(USER_KEY);
-
-  if (!user) {
-    return null;
-  }
+  console.log("========== REGISTER START ==========");
+  console.log("REGISTER URL:", url);
+  console.log("REGISTER EMAIL:", email);
 
   try {
-    return JSON.parse(user);
-  } catch {
-    return null;
-  }
-}
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+      }),
+    });
 
-export async function logout() {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-  await SecureStore.deleteItemAsync(USER_KEY);
+    console.log("REGISTER STATUS:", response.status);
+
+    const responseText = await response.text();
+
+    console.log("REGISTER RESPONSE:", responseText);
+
+    if (!response.ok) {
+      let message = "Kayıt başarısız oldu.";
+
+      try {
+        const data = JSON.parse(responseText);
+        message =
+          data?.detail ||
+          data?.message ||
+          message;
+      } catch {
+        if (responseText) {
+          message = responseText;
+        }
+      }
+
+      throw new Error(message);
+    }
+
+    const result: AuthResponse =
+      JSON.parse(responseText);
+
+    console.log("REGISTER SUCCESS:", result);
+
+    await saveAuthData(result);
+
+    return result;
+  } catch (error) {
+    console.log("========== REGISTER ERROR ==========");
+    console.log(error);
+
+    throw error;
+  }
 }
