@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import * as Location from "expo-location";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -20,6 +22,7 @@ import {
 import { Colors } from "../../theme/colors";
 
 import {
+  fetchAllReports,
   fetchReports,
   fetchStatistics,
   fetchCategoryStatistics,
@@ -28,9 +31,13 @@ import {
 } from "../../lib/api";
 
 import { Report } from "../../types/report";
+import { useUserLocation } from "../../hooks/useUserLocation";
+import { filterReportsByCity } from "../../utils/location";
 
 export default function HomeScreen() {
   const REPORTS_PER_PAGE = 10;
+  const { width: windowWidth } = useWindowDimensions();
+  const { currentCity, currentMunicipality } = useUserLocation();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +50,81 @@ export default function HomeScreen() {
   const [categories, setCategories] = useState<CategoryStatistics[]>([]);
 
   const [reports, setReports] = useState<Report[]>([]);
+  const [locationReports, setLocationReports] = useState<Report[]>([]);
+  const [activeOverviewPage, setActiveOverviewPage] = useState(0);
+  const [cityReports, setCityReports] = useState<Report[]>([]);
+  const [municipalityReports, setMunicipalityReports] = useState<Report[]>([]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function updateLocationReports() {
+      if (!currentCity) {
+        setCityReports([]);
+        setMunicipalityReports([]);
+        return;
+      }
+
+      const locations = await Promise.all(
+        locationReports.map(async (report) => {
+          try {
+            const [address] = await Location.reverseGeocodeAsync({
+              latitude: report.latitude,
+              longitude: report.longitude,
+            });
+
+            return {
+              city: address?.region === currentCity,
+              municipality:
+                Boolean(currentMunicipality) &&
+                (address?.subregion ?? address?.city ?? address?.district) ===
+                  currentMunicipality,
+            };
+          } catch {
+            return {
+              city: filterReportsByCity([report], currentCity).length > 0,
+              municipality: false,
+            };
+          }
+        })
+      );
+
+      if (isActive) {
+        setCityReports(
+          locationReports.filter((_, index) => locations[index].city)
+        );
+        setMunicipalityReports(
+          locationReports.filter((_, index) => locations[index].municipality)
+        );
+      }
+    }
+
+    updateLocationReports();
+
+    return () => {
+      isActive = false;
+    };
+  }, [locationReports, currentCity, currentMunicipality]);
+
+  const cityCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    cityReports.forEach((report) => {
+      counts.set(report.category, (counts.get(report.category) ?? 0) + 1);
+    });
+
+    return Array.from(counts, ([category, count]) => ({ category, count }));
+  }, [cityReports]);
+
+  const municipalityCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    municipalityReports.forEach((report) => {
+      counts.set(report.category, (counts.get(report.category) ?? 0) + 1);
+    });
+
+    return Array.from(counts, ([category, count]) => ({ category, count }));
+  }, [municipalityReports]);
 
   useEffect(() => {
     loadData();
@@ -58,6 +140,7 @@ export default function HomeScreen() {
         statistics,
         categoryStats,
         reportList,
+        allReportList,
       ] = await Promise.all([
         fetchStatistics(),
 
@@ -66,6 +149,10 @@ export default function HomeScreen() {
         fetchReports({
           skip: 0,
           limit: REPORTS_PER_PAGE,
+          sort: "newest",
+        }),
+
+        fetchAllReports({
           sort: "newest",
         }),
       ]);
@@ -80,6 +167,7 @@ export default function HomeScreen() {
 
       // İlk sayfayı tamamen yenile
       setReports(reportList);
+      setLocationReports(allReportList);
 
       setHasMore(
         reportList.length >=
@@ -166,6 +254,13 @@ export default function HomeScreen() {
 
   const totalReports = stats?.total_reports ?? 0;
   const resolutionRate = stats?.resolution_rate ?? 0;
+  const visibleReports =
+    activeOverviewPage === 0
+      ? reports
+      : activeOverviewPage === 1
+      ? cityReports
+      : municipalityReports;
+  const overviewPageWidth = windowWidth - 40;
 
   return (
     <ScrollView
@@ -265,16 +360,74 @@ export default function HomeScreen() {
       ===================================================== */}
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>Kategori Dağılımı</Text>
-            <Text style={styles.sectionSubtitle}>
-              Bildirimlerin kategorilere göre dağılımı
-            </Text>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          onMomentumScrollEnd={({ nativeEvent }) => {
+            const page = Math.round(
+              nativeEvent.contentOffset.x / overviewPageWidth
+            );
+            setActiveOverviewPage(page);
+          }}
+        >
+          <View style={[styles.overviewPage, { width: overviewPageWidth }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Tüm Raporlar</Text>
+              <Text style={styles.sectionSubtitle}>
+                Bildirimlerin kategorilere göre dağılımı
+              </Text>
+            </View>
+            <CategoryChart categories={categories} total={totalReports} />
           </View>
-        </View>
 
-        <CategoryChart categories={categories} total={totalReports} />
+          <View style={[styles.overviewPage, { width: overviewPageWidth }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {currentCity ? `${currentCity} Raporları` : "Bulunduğunuz İl"}
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                {currentCity
+                  ? "Bulunduğunuz ildeki bildirimlerin dağılımı"
+                  : "Konumunuza erişildiğinde ilinizin verileri gösterilecek"}
+              </Text>
+            </View>
+            <CategoryChart categories={cityCategories} total={cityReports.length} />
+          </View>
+
+          <View style={[styles.overviewPage, { width: overviewPageWidth }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {currentMunicipality
+                  ? `${currentMunicipality} Belediyesi`
+                  : "Bulunduğunuz Belediye"}
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                {currentMunicipality
+                  ? "Bulunduğunuz belediyedeki bildirimlerin dağılımı"
+                  : "Konumunuza erişildiğinde belediye verileri gösterilecek"}
+              </Text>
+            </View>
+            <CategoryChart
+              categories={municipalityCategories}
+              total={municipalityReports.length}
+            />
+          </View>
+
+        </ScrollView>
+
+        <View style={styles.pageIndicators} accessibilityLabel="Rapor görünümü sayfaları">
+          {[0, 1, 2].map((page) => (
+            <View
+              key={page}
+              style={[
+                styles.pageIndicator,
+                activeOverviewPage === page && styles.pageIndicatorActive,
+              ]}
+            />
+          ))}
+        </View>
       </View>
 
       {/* =====================================================
@@ -331,12 +484,22 @@ export default function HomeScreen() {
           <View>
             <Text style={styles.sectionTitle}>Son Bildirilen Sorunlar</Text>
             <Text style={styles.sectionSubtitle}>
-              En son eklenen bildirimler
+              {activeOverviewPage === 0
+                ? "En son eklenen bildirimler"
+                : activeOverviewPage === 1
+                ? currentCity
+                  ? `${currentCity} ilindeki en son bildirimler`
+                  : "Konum izni verildiğinde ilinizdeki bildirimler gösterilecek"
+                : activeOverviewPage === 2
+                ? currentMunicipality
+                  ? `${currentMunicipality} belediyesindeki en son bildirimler`
+                  : "Konum izni verildiğinde belediyenizdeki bildirimler gösterilecek"
+                : ""}
             </Text>
           </View>
         </View>
 
-        {reports.map((report) => {
+        {visibleReports.map((report) => {
           const priorityColor =
             Colors.priority[
               report.priority as keyof typeof Colors.priority
@@ -435,7 +598,7 @@ export default function HomeScreen() {
             LİSTE BİTTİ
         =================================================== */}
 
-        {!hasMore && reports.length > 0 && (
+        {!hasMore && activeOverviewPage === 0 && reports.length > 0 && (
           <View style={styles.endContainer}>
             <Text style={styles.endText}>
               Tüm bildirimler gösteriliyor.
@@ -588,6 +751,29 @@ const styles = StyleSheet.create({
 
   sectionHeader: {
     marginBottom: 14,
+  },
+
+  overviewPage: {
+    paddingHorizontal: 1,
+  },
+
+  pageIndicators: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 14,
+  },
+
+  pageIndicator: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#CBD5E1",
+  },
+
+  pageIndicatorActive: {
+    backgroundColor: Colors.primary,
   },
 
   sectionTitle: {

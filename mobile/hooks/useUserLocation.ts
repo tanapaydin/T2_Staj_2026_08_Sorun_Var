@@ -10,6 +10,9 @@ export function useUserLocation() {
   } | null>(null);
 
   const [currentCity, setCurrentCity] = useState<string | null>(null);
+  const [currentMunicipality, setCurrentMunicipality] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     (async () => {
@@ -28,11 +31,26 @@ export function useUserLocation() {
         longitude: location.coords.longitude,
       });
 
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      // Türkiye'de `region` il bilgisini taşır. Ters geocoding sonucu
+      // kullanılamazsa mevcut koordinat tabanlı çözüm yedek olarak kalır.
       setCurrentCity(
-        detectCity(
-          location.coords.latitude,
-          location.coords.longitude
-        )
+        address?.region ??
+          detectCity(
+            location.coords.latitude,
+            location.coords.longitude
+          )
+      );
+
+      setCurrentMunicipality(
+        address?.subregion ??
+          address?.city ??
+          address?.district ??
+          null
       );
     })();
   }, []);
@@ -40,5 +58,6 @@ export function useUserLocation() {
   return {
     userLocation,
     currentCity,
+    currentMunicipality,
   };
 }

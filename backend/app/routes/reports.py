@@ -1,13 +1,21 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta
+
 import requests
 
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    status,
+)
+
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
 from app.database import get_db
-from app.models import Report, ReportImage, User
 from app.dependencies import get_current_user
+from app.models import Report, User
+from app.schemas import ReportCreate, ReportResponse
 
 
 router = APIRouter(
@@ -16,79 +24,9 @@ router = APIRouter(
 )
 
 
-class ReportCreate(BaseModel):
-    photos: list[str]
-    categories: list[str]
-    description: str
-    latitude: float
-    longitude: float
-
-
-@router.post("/")
-def create_report(
-    data: ReportCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if not data.photos:
-        raise HTTPException(
-            status_code=400,
-            detail="En az bir fotoğraf gerekli.",
-        )
-
-    if not data.categories:
-        raise HTTPException(
-            status_code=400,
-            detail="En az bir kategori gerekli.",
-        )
-
-    if not data.description.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Açıklama gerekli.",
-        )
-
-    category = ", ".join(data.categories)
-
-    report = Report(
-        user_id=current_user.id,
-        title=f"{data.categories[0]} sorunu",
-        description=data.description.strip(),
-        category=category,
-        latitude=data.latitude,
-        longitude=data.longitude,
-        status="pending",
-        progress=0,
-        priority="medium",
-        view_count=0,
-    )
-
-    db.add(report)
-    db.flush()
-
-    for photo in data.photos:
-        report_image = ReportImage(
-            report_id=report.id,
-            image_url=photo,
-        )
-        db.add(report_image)
-
-    db.commit()
-    db.refresh(report)
-
-    return {
-        "id": str(report.id),
-        "title": report.title,
-        "description": report.description,
-        "category": report.category,
-        "latitude": report.latitude,
-        "longitude": report.longitude,
-        "status": report.status,
-        "progress": report.progress,
-        "priority": report.priority,
-        "created_at": report.created_at,
-    }
-
+# ============================================================
+# REPORT LIST
+# ============================================================
 
 @router.get("/")
 def list_reports(
@@ -97,31 +35,58 @@ def list_reports(
     priority: str | None = None,
     date: str | None = None,
     sort: str = "newest",
+
+    # Pagination
+    skip: int = Query(
+        0,
+        ge=0,
+    ),
+
+    limit: int = Query(
+        10,
+        ge=1,
+        le=50,
+    ),
+
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Report).filter(
-        Report.user_id == current_user.id
-    )
+    query = db.query(Report)
+
+    # --------------------------------------------------------
+    # Category filter
+    # --------------------------------------------------------
 
     if category and category != "all":
         query = query.filter(
             Report.category == category
         )
 
+    # --------------------------------------------------------
+    # Resolved / unresolved filter
+    # --------------------------------------------------------
+
     if resolved is True:
         query = query.filter(
             Report.progress == 100
         )
+
     elif resolved is False:
         query = query.filter(
             Report.progress < 100
         )
 
+    # --------------------------------------------------------
+    # Priority filter
+    # --------------------------------------------------------
+
     if priority:
         query = query.filter(
             Report.priority == priority
         )
+
+    # --------------------------------------------------------
+    # Date filter
+    # --------------------------------------------------------
 
     if date:
         now = datetime.utcnow()
@@ -139,29 +104,73 @@ def list_reports(
             )
 
         elif date == "7d":
+            start = now - timedelta(days=7)
+
             query = query.filter(
-                Report.created_at >= now - timedelta(days=7)
+                Report.created_at >= start
             )
 
         elif date == "30d":
+            start = now - timedelta(days=30)
+
             query = query.filter(
-                Report.created_at >= now - timedelta(days=30)
+                Report.created_at >= start
             )
 
+    # --------------------------------------------------------
+    # Sorting
+    # --------------------------------------------------------
+
     if sort == "oldest":
+
         query = query.order_by(
-            Report.created_at.asc()
-        )
-    elif sort == "most_viewed":
-        query = query.order_by(
-            Report.view_count.desc()
-        )
-    else:
-        query = query.order_by(
-            Report.created_at.desc()
+            Report.created_at.asc(),
+            Report.id.asc(),
         )
 
-    reports = query.all()
+    elif sort == "most_viewed":
+
+        query = query.order_by(
+            Report.view_count.desc(),
+            Report.created_at.desc(),
+            Report.id.desc(),
+        )
+
+    else:
+
+        # Default: newest
+        #
+        # created_at aynı olan kayıtların sırasının
+        # değişmemesi için id de kullanılıyor.
+        query = query.order_by(
+            Report.created_at.desc(),
+            Report.id.desc(),
+        )
+
+    # --------------------------------------------------------
+    # Pagination
+    # --------------------------------------------------------
+
+    print(
+        f"REPORTS PAGINATION -> "
+        f"skip={skip}, limit={limit}"
+    )
+
+    reports = (
+        query
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    print(
+        f"REPORTS RETURNED -> "
+        f"{len(reports)}"
+    )
+
+    # --------------------------------------------------------
+    # Response
+    # --------------------------------------------------------
 
     return [
         {
@@ -174,77 +183,166 @@ def list_reports(
             "progress": report.progress,
             "priority": report.priority,
             "view_count": report.view_count,
-            "created_at": report.created_at,
+            "created_at": (
+                report.created_at.isoformat()
+                if report.created_at
+                else None
+            ),
         }
         for report in reports
     ]
 
 
+# ============================================================
+# CREATE REPORT
+# ============================================================
+
+@router.post(
+    "/",
+    response_model=ReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_report(
+    report_create: ReportCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),
+):
+    report = Report(
+        user_id=current_user.id,
+        title=report_create.title,
+        description=report_create.description,
+        category=report_create.category,
+        latitude=report_create.latitude,
+        longitude=report_create.longitude,
+    )
+
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    return report
+
+
+# ============================================================
+# GENERAL STATISTICS
+# ============================================================
+
 @router.get("/statistics")
-def report_statistics(
+def get_statistics(
     db: Session = Depends(get_db),
 ):
+    print("STATISTICS REQUEST")
+
+    # --------------------------------------------------------
+    # Total reports
+    # --------------------------------------------------------
+
     total_reports = (
-        db.query(func.count(Report.id))
-        .scalar()
-        or 0
+        db.query(Report)
+        .count()
     )
+
+    # --------------------------------------------------------
+    # Resolved reports
+    # --------------------------------------------------------
 
     resolved_reports = (
-        db.query(func.count(Report.id))
-        .filter(Report.progress == 100)
-        .scalar()
-        or 0
+        db.query(Report)
+        .filter(
+            Report.progress == 100
+        )
+        .count()
     )
+
+    # --------------------------------------------------------
+    # Pending reports
+    # --------------------------------------------------------
 
     pending_reports = (
-        db.query(func.count(Report.id))
-        .filter(Report.progress < 100)
-        .scalar()
-        or 0
+        db.query(Report)
+        .filter(
+            Report.progress < 100
+        )
+        .count()
     )
+
+    # --------------------------------------------------------
+    # Average progress
+    # --------------------------------------------------------
 
     average_progress = (
-        db.query(func.avg(Report.progress))
+        db.query(
+            func.avg(Report.progress)
+        )
         .scalar()
-        or 0
     )
 
-    resolution_rate = (
-        (resolved_reports / total_reports) * 100
-        if total_reports > 0
-        else 0
-    )
+    if average_progress is None:
+        average_progress = 0
 
-    return {
+    # --------------------------------------------------------
+    # Resolution rate
+    # --------------------------------------------------------
+
+    if total_reports > 0:
+        resolution_rate = (
+            resolved_reports
+            / total_reports
+            * 100
+        )
+    else:
+        resolution_rate = 0
+
+    result = {
         "total_reports": total_reports,
         "resolved_reports": resolved_reports,
         "pending_reports": pending_reports,
         "average_progress": round(
             float(average_progress),
-            1,
+            2,
         ),
         "resolution_rate": round(
-            resolution_rate,
-            1,
+            float(resolution_rate),
+            2,
         ),
     }
 
+    print(
+        "STATISTICS RESULT:",
+        result,
+    )
+
+    return result
+
+
+# ============================================================
+# CATEGORY STATISTICS
+# ============================================================
 
 @router.get("/statistics/category")
-def category_statistics(
+def get_category_statistics(
     db: Session = Depends(get_db),
 ):
+    print(
+        "CATEGORY STATISTICS REQUEST"
+    )
+
     results = (
         db.query(
             Report.category,
-            func.count(Report.id).label("count"),
+            func.count(Report.id).label(
+                "count"
+            ),
         )
-        .group_by(Report.category)
+        .group_by(
+            Report.category
+        )
         .all()
     )
 
-    return [
+    response = [
         {
             "category": category,
             "count": count,
@@ -252,10 +350,31 @@ def category_statistics(
         for category, count in results
     ]
 
+    # En çok rapor bulunan kategori üstte
+    response.sort(
+        key=lambda item: item["count"],
+        reverse=True,
+    )
+
+    print(
+        "CATEGORY STATISTICS RESULT:",
+        response,
+    )
+
+    return response
+
+
+# ============================================================
+# LOCATION SEARCH
+# ============================================================
 
 @router.get("/search")
-def search_location(query: str):
-    url = "https://nominatim.openstreetmap.org/search"
+def search_location(
+    query: str,
+):
+    url = (
+        "https://nominatim.openstreetmap.org/search"
+    )
 
     params = {
         "q": query,
@@ -265,7 +384,7 @@ def search_location(query: str):
     }
 
     headers = {
-        "User-Agent": "SorunVar/1.0"
+        "User-Agent": "SorunVar/1.0",
     }
 
     response = requests.get(
@@ -274,6 +393,8 @@ def search_location(query: str):
         headers=headers,
         timeout=10,
     )
+
+    response.raise_for_status()
 
     data = response.json()
 
@@ -286,18 +407,31 @@ def search_location(query: str):
 
     return {
         "name": result["display_name"],
-        "latitude": float(result["lat"]),
-        "longitude": float(result["lon"]),
+        "latitude": float(
+            result["lat"]
+        ),
+        "longitude": float(
+            result["lon"]
+        ),
         "latitudeDelta": 0.08,
         "longitudeDelta": 0.08,
     }
 
 
+# ============================================================
+# LOCATION SUGGESTIONS
+# ============================================================
+
 @router.get("/search/suggestions")
 def search_suggestions(
-    query: str = Query(..., min_length=2)
+    query: str = Query(
+        ...,
+        min_length=2,
+    ),
 ):
-    url = "https://nominatim.openstreetmap.org/search"
+    url = (
+        "https://nominatim.openstreetmap.org/search"
+    )
 
     params = {
         "q": query,
@@ -310,7 +444,7 @@ def search_suggestions(
     }
 
     headers = {
-        "User-Agent": "SorunVar/1.0"
+        "User-Agent": "SorunVar/1.0",
     }
 
     response = requests.get(
@@ -327,7 +461,10 @@ def search_suggestions(
     suggestions = []
 
     for item in results:
-        address = item.get("address", {})
+        address = item.get(
+            "address",
+            {},
+        )
 
         municipality = (
             address.get("municipality")
@@ -347,15 +484,26 @@ def search_suggestions(
         if not municipality:
             continue
 
-        name = f"{municipality} Belediyesi, {city}"
+        name = (
+            f"{municipality} Belediyesi, "
+            f"{city}"
+        )
 
         suggestions.append(
             {
                 "name": name,
-                "latitude": float(item["lat"]),
-                "longitude": float(item["lon"]),
+                "latitude": float(
+                    item["lat"]
+                ),
+                "longitude": float(
+                    item["lon"]
+                ),
             }
         )
+
+    # --------------------------------------------------------
+    # Duplicate temizleme
+    # --------------------------------------------------------
 
     unique = []
     seen = set()
@@ -363,40 +511,49 @@ def search_suggestions(
     for suggestion in suggestions:
         if suggestion["name"] not in seen:
             unique.append(suggestion)
-            seen.add(suggestion["name"])
+            seen.add(
+                suggestion["name"]
+            )
+
+    # --------------------------------------------------------
+    # Yazılan metinle başlayanları öne al
+    # --------------------------------------------------------
 
     q = query.lower()
 
     unique.sort(
-        key=lambda x: (
-            not x["name"].lower().startswith(q),
-            len(x["name"]),
+        key=lambda item: (
+            not item["name"]
+            .lower()
+            .startswith(q),
+            len(item["name"]),
         )
     )
 
     return unique
 
 
+# ============================================================
+# GET SINGLE REPORT
+# ============================================================
+
 @router.get("/{report_id}")
 def get_report(
     report_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     report = (
         db.query(Report)
         .filter(
-            Report.id == report_id,
-            Report.user_id == current_user.id,
+            Report.id == report_id
         )
         .first()
     )
 
     if not report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found",
-        )
+        return {
+            "message": "Report not found"
+        }
 
     return {
         "id": str(report.id),
@@ -409,6 +566,14 @@ def get_report(
         "progress": report.progress,
         "priority": report.priority,
         "view_count": report.view_count,
-        "created_at": report.created_at,
-        "updated_at": report.updated_at,
+        "created_at": (
+            report.created_at.isoformat()
+            if report.created_at
+            else None
+        ),
+        "updated_at": (
+            report.updated_at.isoformat()
+            if report.updated_at
+            else None
+        ),
     }

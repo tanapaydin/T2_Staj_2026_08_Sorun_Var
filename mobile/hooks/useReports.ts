@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  fetchReports,
+  fetchAllReports,
   ReportFilters,
 } from "../lib/api";
 import { Report } from "../types/report";
@@ -19,9 +19,7 @@ export function useReports() {
     try {
       setLoading(true);
 
-      const data = await fetchReports(filters);
-
-      setReports(data);
+      setReports(await fetchAllReports(filters));
     } catch (error) {
       console.log(error);
     } finally {

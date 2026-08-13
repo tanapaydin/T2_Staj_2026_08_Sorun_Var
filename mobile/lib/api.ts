@@ -1,6 +1,9 @@
 import { API_CONFIG } from "../config/api";
 import { Report } from "../types/report";
-import { getAccessToken } from "./auth";
+
+// ---------------------------------------------------------------------------
+// TYPES
+// ---------------------------------------------------------------------------
 
 export type ReportFilters = {
   category?: string;
@@ -8,156 +11,25 @@ export type ReportFilters = {
   priority?: "high" | "medium" | "low";
   date?: "today" | "7d" | "30d";
   sort?: "newest" | "oldest" | "most_viewed";
+
+  // Pagination
+  skip?: number;
+  limit?: number;
 };
 
-async function getAuthHeaders() {
-  const token = await getAccessToken();
-
-  console.log(
-    "AUTH TOKEN VAR MI:",
-    token ? "EVET" : "HAYIR"
-  );
-
-  return {
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : {}),
-  };
-}
-
-export async function fetchReports(
-  filters?: ReportFilters
-): Promise<Report[]> {
-  const params = new URLSearchParams();
-
-  if (filters?.category && filters.category !== "all") {
-    params.append("category", filters.category);
-  }
-
-  if (filters?.resolved !== undefined) {
-    params.append("resolved", String(filters.resolved));
-  }
-
-  if (filters?.priority) {
-    params.append("priority", filters.priority);
-  }
-
-  if (filters?.date) {
-    params.append("date", filters.date);
-  }
-
-  if (filters?.sort) {
-    params.append("sort", filters.sort);
-  }
-
-  const url = params.toString()
-    ? `${API_CONFIG.BASE_URL}/reports?${params.toString()}`
-    : `${API_CONFIG.BASE_URL}/reports`;
-
-  const response = await fetch(url, {
-    headers: await getAuthHeaders(),
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch reports");
-  }
-
-  return response.json();
-}
-
-export async function fetchReport(reportId: string) {
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/${reportId}`,
-    {
-      headers: await getAuthHeaders(),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch report");
-  }
-
-  return response.json();
-}
-
-export async function createReport(data: {
-  photos: string[];
-  categories: string[];
+export type CreateReportInput = {
+  title: string;
   description: string;
+  category: string;
   latitude: number;
   longitude: number;
-}) {
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await getAuthHeaders()),
-      },
-      body: JSON.stringify(data),
-    }
-  );
-
-  if (!response.ok) {
-    let message = "Rapor oluşturulamadı.";
-
-    try {
-      const error = await response.json();
-
-      message =
-        error?.detail ||
-        error?.message ||
-        message;
-    } catch {}
-
-    throw new Error(message);
-  }
-
-  return response.json();
-}
-
-export async function searchLocation(query: string) {
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/search?query=${encodeURIComponent(
-      query
-    )}`
-  );
-
-  if (!response.ok) {
-    throw new Error("Location search failed");
-  }
-
-  return response.json();
-}
+};
 
 export type LocationSuggestion = {
   name: string;
   latitude: number;
   longitude: number;
 };
-
-export async function fetchLocationSuggestions(
-  query: string
-): Promise<LocationSuggestion[]> {
-  if (query.trim().length < 2) {
-    return [];
-  }
-
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/search/suggestions?query=${encodeURIComponent(
-      query
-    )}`
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      "Failed to fetch location suggestions"
-    );
-  }
-
-  return response.json();
-}
 
 export type ReportStatistics = {
   total_reports: number;
@@ -167,99 +39,373 @@ export type ReportStatistics = {
   resolution_rate: number;
 };
 
-export async function fetchStatistics() {
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/statistics`
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch statistics");
-  }
-
-  return response.json();
-}
-
 export type CategoryStatistics = {
   category: string;
   count: number;
 };
 
-export async function fetchCategoryStatistics(): Promise<
-  CategoryStatistics[]
-> {
-  const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports/statistics/category`
-  );
+// ---------------------------------------------------------------------------
+// HELPER
+// ---------------------------------------------------------------------------
 
-  if (!response.ok) {
-    throw new Error("Failed to fetch statistics");
+async function parseError(
+  response: Response
+): Promise<string> {
+  try {
+    const data = await response.json();
+
+    return (
+      data?.detail ||
+      data?.message ||
+      "İşlem başarısız oldu."
+    );
+  } catch {
+    return "İşlem başarısız oldu.";
   }
-
-  return response.json();
 }
 
-/**
- * Fotoğrafı Gemini AI'a gönderir.
- *
- * Kullanıcı kategori seçmişse:
- * - AI açıklama oluşturur.
- * - Kategori değiştirmez.
- *
- * Kullanıcı kategori seçmemişse:
- * - AI açıklama oluşturur.
- * - AI uygun kategori önerir.
- */
-export async function analyzeReportPhotos(
-  photos: string[],
-  selectedCategories: string[] = []
-) {
-  if (photos.length === 0) {
-    throw new Error(
-      "Yapay zeka analizi için en az bir fotoğraf gerekli."
+// ---------------------------------------------------------------------------
+// FETCH REPORTS
+// ---------------------------------------------------------------------------
+
+export async function fetchReports(
+  filters?: ReportFilters
+): Promise<Report[]> {
+  const params = new URLSearchParams();
+
+  // Category
+  if (
+    filters?.category &&
+    filters.category !== "all"
+  ) {
+    params.append(
+      "category",
+      filters.category
     );
   }
 
-  const formData = new FormData();
+  // Resolved
+  if (filters?.resolved !== undefined) {
+    params.append(
+      "resolved",
+      String(filters.resolved)
+    );
+  }
 
-  const firstPhoto = photos[0];
+  // Priority
+  if (filters?.priority) {
+    params.append(
+      "priority",
+      filters.priority
+    );
+  }
 
-  formData.append("image", {
-    uri: firstPhoto,
-    name: "report-photo.jpg",
-    type: "image/jpeg",
-  } as any);
+  // Date
+  if (filters?.date) {
+    params.append(
+      "date",
+      filters.date
+    );
+  }
 
-  formData.append(
-    "selected_categories",
-    selectedCategories.join(",")
+  // Sorting
+  if (filters?.sort) {
+    params.append(
+      "sort",
+      filters.sort
+    );
+  }
+
+  // Pagination
+  if (filters?.skip !== undefined) {
+    params.append(
+      "skip",
+      String(filters.skip)
+    );
+  }
+
+  if (filters?.limit !== undefined) {
+    params.append(
+      "limit",
+      String(filters.limit)
+    );
+  }
+
+  const queryString =
+    params.toString();
+
+  const url =
+    `${API_CONFIG.BASE_URL}/reports` +
+    (
+      queryString
+        ? `?${queryString}`
+        : ""
+    );
+
+  console.log(
+    "FETCH REPORTS:",
+    url
+  );
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "FETCH REPORTS ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: Report[] =
+    await response.json();
+
+  console.log(
+    "FETCH REPORTS RESULT:",
+    data.length
+  );
+
+  return data;
+}
+
+export async function fetchAllReports(
+  filters?: ReportFilters
+): Promise<Report[]> {
+  const reports: Report[] = [];
+  const limit = 50;
+  let skip = 0;
+
+  while (true) {
+    const page = await fetchReports({
+      ...filters,
+      skip,
+      limit,
+    });
+
+    reports.push(...page);
+
+    if (page.length < limit) {
+      return reports;
+    }
+
+    skip += page.length;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CREATE REPORT
+// ---------------------------------------------------------------------------
+
+export async function createReport(
+  input: CreateReportInput,
+  accessToken: string
+): Promise<Report> {
+  console.log(
+    "CREATE REPORT:",
+    input
   );
 
   const response = await fetch(
-    `${API_CONFIG.BASE_URL}/ai/analyze-image`,
+    `${API_CONFIG.BASE_URL}/reports`,
     {
       method: "POST",
+
       headers: {
-        ...(await getAuthHeaders()),
+        Authorization:
+          `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json",
       },
-      body: formData,
+
+      body: JSON.stringify(input),
     }
   );
 
   if (!response.ok) {
-    let message =
-      "Yapay zeka analizi başarısız.";
+    const message =
+      await parseError(response);
 
-    try {
-      const error = await response.json();
+    console.log(
+      "CREATE REPORT ERROR:",
+      response.status,
+      message
+    );
 
-      message =
-        error?.detail ||
-        error?.message ||
-        message;
-    } catch {}
+    throw new Error(message);
+  }
+
+  const data: Report =
+    await response.json();
+
+  console.log(
+    "CREATE REPORT RESULT:",
+    data
+  );
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// LOCATION SEARCH
+// ---------------------------------------------------------------------------
+
+export async function searchLocation(
+  query: string
+) {
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/search` +
+    `?query=${encodeURIComponent(query)}`;
+
+  console.log(
+    "SEARCH LOCATION:",
+    url
+  );
+
+  const response =
+    await fetch(url);
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "LOCATION SEARCH ERROR:",
+      response.status,
+      message
+    );
 
     throw new Error(message);
   }
 
   return response.json();
+}
+
+// ---------------------------------------------------------------------------
+// LOCATION SUGGESTIONS
+// ---------------------------------------------------------------------------
+
+export async function fetchLocationSuggestions(
+  query: string
+): Promise<LocationSuggestion[]> {
+  if (query.trim().length < 2) {
+    return [];
+  }
+
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/search/suggestions` +
+    `?query=${encodeURIComponent(query)}`;
+
+  console.log(
+    "FETCH LOCATION SUGGESTIONS:",
+    url
+  );
+
+  const response =
+    await fetch(url);
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "LOCATION SUGGESTIONS ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: LocationSuggestion[] =
+    await response.json();
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// GENERAL STATISTICS
+// ---------------------------------------------------------------------------
+
+export async function fetchStatistics(): Promise<ReportStatistics> {
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/statistics`;
+
+  console.log(
+    "FETCH STATISTICS:",
+    url
+  );
+
+  const response =
+    await fetch(url);
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "FETCH STATISTICS ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: ReportStatistics =
+    await response.json();
+
+  console.log(
+    "STATISTICS RESULT:",
+    data
+  );
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// CATEGORY STATISTICS
+// ---------------------------------------------------------------------------
+
+export async function fetchCategoryStatistics(): Promise<
+  CategoryStatistics[]
+> {
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/statistics/category`;
+
+  console.log(
+    "FETCH CATEGORY STATISTICS:",
+    url
+  );
+
+  const response =
+    await fetch(url);
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "CATEGORY STATISTICS ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: CategoryStatistics[] =
+    await response.json();
+
+  console.log(
+    "CATEGORY STATISTICS RESULT:",
+    data
+  );
+
+  return data;
 }
