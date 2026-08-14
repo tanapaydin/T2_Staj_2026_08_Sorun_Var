@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
+from uuid import UUID
 
 import requests
 
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Query,
     status,
 )
@@ -14,7 +16,7 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Report, User
+from app.models import Report, User, ReportFollow
 from app.schemas import ReportCreate, ReportResponse
 
 
@@ -183,6 +185,7 @@ def list_reports(
             "progress": report.progress,
             "priority": report.priority,
             "view_count": report.view_count,
+            "follower_count": report.follower_count or 0,
             "created_at": (
                 report.created_at.isoformat()
                 if report.created_at
@@ -317,6 +320,100 @@ def get_statistics(
     return result
 
 
+# ============================================================
+# TOP STATISTICS
+# ============================================================
+
+@router.get("/statistics/top")
+def get_top_statistics(
+    period: str = "all",
+    db: Session = Depends(get_db),
+):
+    if period not in {"all", "month", "week"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Geçersiz dönem. all, month veya week kullanılmalı.",
+        )
+
+    query = db.query(Report)
+
+    if period == "week":
+        start = datetime.utcnow() - timedelta(days=7)
+
+        query = query.filter(
+            Report.created_at >= start
+        )
+
+    elif period == "month":
+        start = datetime.utcnow() - timedelta(days=30)
+
+        query = query.filter(
+            Report.created_at >= start
+        )
+
+    # --------------------------------------------------------
+    # En çok şikayet edilen kategori
+    # --------------------------------------------------------
+
+    top_category = (
+        query
+        .with_entities(
+            Report.category,
+            func.count(Report.id).label("count"),
+        )
+        .group_by(Report.category)
+        .order_by(
+            func.count(Report.id).desc()
+        )
+        .first()
+    )
+
+    # --------------------------------------------------------
+    # En çok şikayet olan il
+    # --------------------------------------------------------
+
+    top_city = (
+        query
+        .filter(
+            Report.city.isnot(None),
+            Report.city != "",
+        )
+        .with_entities(
+            Report.city,
+            func.count(Report.id).label("count"),
+        )
+        .group_by(Report.city)
+        .order_by(
+            func.count(Report.id).desc()
+        )
+        .first()
+    )
+
+    result = {
+        "top_category": (
+            {
+                "category": top_category[0],
+                "count": top_category[1],
+            }
+            if top_category
+            else None
+        ),
+        "top_city": (
+            {
+                "city": top_city[0],
+                "count": top_city[1],
+            }
+            if top_city
+            else None
+        ),
+    }
+
+    print(
+        "TOP STATISTICS:",
+        result,
+    )
+
+    return result
 # ============================================================
 # CATEGORY STATISTICS
 # ============================================================
@@ -534,6 +631,115 @@ def search_suggestions(
 
 
 # ============================================================
+# FOLLOW REPORT
+# ============================================================
+
+@router.post("/{report_id}/follow")
+def follow_report(
+    report_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = (
+        db.query(Report)
+        .filter(Report.id == report_id)
+        .first()
+    )
+
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    existing_follow = (
+        db.query(ReportFollow)
+        .filter(
+            ReportFollow.report_id == report_id,
+            ReportFollow.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if existing_follow:
+        return {
+            "following": True,
+            "follower_count": report.follower_count or 0,
+        }
+
+    follow = ReportFollow(
+        report_id=report_id,
+        user_id=current_user.id,
+    )
+
+    db.add(follow)
+
+    report.follower_count = (
+        report.follower_count or 0
+    ) + 1
+
+    db.commit()
+    db.refresh(report)
+
+    return {
+        "following": True,
+        "follower_count": report.follower_count,
+    }
+
+
+# ============================================================
+# UNFOLLOW REPORT
+# ============================================================
+
+@router.delete("/{report_id}/follow")
+def unfollow_report(
+    report_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = (
+        db.query(Report)
+        .filter(Report.id == report_id)
+        .first()
+    )
+
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    existing_follow = (
+        db.query(ReportFollow)
+        .filter(
+            ReportFollow.report_id == report_id,
+            ReportFollow.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not existing_follow:
+        return {
+            "following": False,
+            "follower_count": report.follower_count or 0,
+        }
+
+    db.delete(existing_follow)
+
+    report.follower_count = max(
+        (report.follower_count or 0) - 1,
+        0,
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    return {
+        "following": False,
+        "follower_count": report.follower_count,
+    }
+
+# ============================================================
 # GET SINGLE REPORT
 # ============================================================
 
@@ -566,6 +772,7 @@ def get_report(
         "progress": report.progress,
         "priority": report.priority,
         "view_count": report.view_count,
+        "follower_count": report.follower_count or 0,
         "created_at": (
             report.created_at.isoformat()
             if report.created_at

@@ -67,6 +67,7 @@ class ReportResponse(BaseModel):
     progress: int
     priority: str
     view_count: int
+    follower_count: int
     created_at: datetime
 
     class Config:

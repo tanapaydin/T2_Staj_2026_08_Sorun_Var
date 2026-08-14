@@ -29,7 +29,7 @@ export default function MapMarkers({
   if (Platform.OS === "web") return null;
 
   // Yakın zoom: normal markerlar
-  if (latitudeDelta < 1.0) {
+  if (latitudeDelta < 2.5) {
     return (
       <>
         {reports.map((report) => (
@@ -67,13 +67,15 @@ export default function MapMarkers({
           }
         >
           <View style={styles.clusterContainer}>
-            <AppText
-              variant="bodyMedium"
-              color="#FFFFFF"
-              style={{ fontWeight: "700" }}
-            >
-              {city.count}
-            </AppText>
+            <View style={styles.clusterInner}>
+              <AppText
+                variant="bodyMedium"
+                color="#FFFFFF"
+                style={styles.clusterText}
+              >
+                {city.count}
+              </AppText>
+            </View>
           </View>
         </Marker>
       ))}
@@ -146,13 +148,42 @@ function detectCity(lat: number, lon: number) {
 
 const styles = StyleSheet.create({
   clusterContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+
     backgroundColor: Colors.primary,
+
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 3,
+
+    borderWidth: 2,
     borderColor: "#FFFFFF",
+
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 4,
+
+    elevation: 5,
+  },
+
+  clusterInner: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+
+  clusterText: {
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

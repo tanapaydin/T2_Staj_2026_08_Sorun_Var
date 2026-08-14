@@ -44,6 +44,23 @@ export type CategoryStatistics = {
   count: number;
 };
 
+export type StatisticsPeriod =
+  | "all"
+  | "month"
+  | "week";
+
+export type TopStatistics = {
+  top_category: {
+    category: string;
+    count: number;
+  } | null;
+
+  top_city: {
+    city: string;
+    count: number;
+  } | null;
+};
+
 // ---------------------------------------------------------------------------
 // HELPER
 // ---------------------------------------------------------------------------
@@ -404,6 +421,154 @@ export async function fetchCategoryStatistics(): Promise<
 
   console.log(
     "CATEGORY STATISTICS RESULT:",
+    data
+  );
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// REPORT FOLLOW
+// ---------------------------------------------------------------------------
+
+export type FollowResponse = {
+  following: boolean;
+  follower_count: number;
+};
+
+export async function followReport(
+  reportId: string,
+  accessToken: string
+): Promise<FollowResponse> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/reports/${reportId}/follow`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const message = await parseError(response);
+
+    console.log(
+      "FOLLOW REPORT ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function unfollowReport(
+  reportId: string,
+  accessToken: string
+): Promise<FollowResponse> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/reports/${reportId}/follow`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const message = await parseError(response);
+
+    console.log(
+      "UNFOLLOW REPORT ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+// ---------------------------------------------------------------------------
+// FOLLOWED REPORTS
+// ---------------------------------------------------------------------------
+
+export async function fetchFollowedReports(
+  accessToken: string
+): Promise<Report[]> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/users/me/following`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const message = await parseError(response);
+
+    console.log(
+      "FETCH FOLLOWED REPORTS ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: Report[] = await response.json();
+
+  console.log(
+    "FETCH FOLLOWED REPORTS RESULT:",
+    data.length
+  );
+
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// TOP STATISTICS
+// ---------------------------------------------------------------------------
+
+export async function fetchTopStatistics(
+  period: StatisticsPeriod
+): Promise<TopStatistics> {
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/statistics/top` +
+    `?period=${period}`;
+
+  console.log(
+    "FETCH TOP STATISTICS:",
+    url
+  );
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const message =
+      await parseError(response);
+
+    console.log(
+      "TOP STATISTICS ERROR:",
+      response.status,
+      message
+    );
+
+    throw new Error(message);
+  }
+
+  const data: TopStatistics =
+    await response.json();
+
+  console.log(
+    "TOP STATISTICS RESULT:",
     data
   );
 

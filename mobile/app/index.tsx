@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { getAuthData } from "../lib/auth";
 
+
 export default function Index() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
