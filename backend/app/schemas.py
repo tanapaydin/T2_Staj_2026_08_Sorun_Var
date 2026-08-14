@@ -61,8 +61,16 @@ class ReportResponse(BaseModel):
     title: str
     description: str
     category: str
+
     latitude: float
     longitude: float
+
+    city: str | None = None
+    municipality: str | None = None
+    district: str | None = None
+    neighborhood: str | None = None
+    address: str | None = None
+
     status: str
     progress: int
     priority: str

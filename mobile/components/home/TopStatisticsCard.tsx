@@ -88,10 +88,50 @@ export default function TopStatisticsCard({
     }
 
     setPeriod(selectedPeriod);
+
     await loadTopStatistics(
       selectedPeriod
     );
   }
+
+  const priorityCounts =
+    topStatistics?.priority_counts ?? {
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+
+  const totalPriorityReports =
+    priorityCounts.high +
+    priorityCounts.medium +
+    priorityCounts.low;
+
+  const highPercentage =
+    totalPriorityReports > 0
+      ? Math.round(
+          (priorityCounts.high /
+            totalPriorityReports) *
+            100
+        )
+      : 0;
+
+  const mediumPercentage =
+    totalPriorityReports > 0
+      ? Math.round(
+          (priorityCounts.medium /
+            totalPriorityReports) *
+            100
+        )
+      : 0;
+
+  const lowPercentage =
+    totalPriorityReports > 0
+      ? Math.round(
+          (priorityCounts.low /
+            totalPriorityReports) *
+            100
+        )
+      : 0;
 
   return (
     <View style={styles.wrapper}>
@@ -100,6 +140,7 @@ export default function TopStatisticsCard({
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
+        contentContainerStyle={styles.scrollContent}
         onMomentumScrollEnd={({
           nativeEvent,
         }) => {
@@ -208,20 +249,16 @@ export default function TopStatisticsCard({
             },
           ]}
         >
-          <View style={styles.topHeader}>
-            <View>
-              <Text style={styles.topTitle}>
-                En Yoğun Bildirimler
-              </Text>
+          <View style={styles.pageHeader}>
+            <Text style={styles.topTitle}>
+              En Yoğun Bildirimler
+            </Text>
 
-              <Text style={styles.topSubtitle}>
-                Seçilen döneme göre en fazla
-                bildirimin olduğu alanlar
-              </Text>
-            </View>
+            <Text style={styles.topSubtitle}>
+              Seçilen döneme göre en fazla
+              bildirimin olduğu alanlar
+            </Text>
           </View>
-
-          {/* ZAMAN FİLTRELERİ */}
 
           <View style={styles.periodRow}>
             {(
@@ -259,27 +296,19 @@ export default function TopStatisticsCard({
             })}
           </View>
 
-          {/* İKİ KART */}
-
           <View style={styles.topCardsRow}>
             {/* KATEGORİ */}
 
             <View style={styles.topCard}>
-              <Text
-                style={styles.topCardLabel}
-              >
+              <Text style={styles.topCardLabel}>
                 En Çok Şikayet Edilen
               </Text>
 
-              <Text
-                style={styles.topCardTitle}
-              >
+              <Text style={styles.topCardTitle}>
                 Kategori
               </Text>
 
-              <View
-                style={styles.resultWrapper}
-              >
+              <View style={styles.resultWrapper}>
                 <View
                   style={[
                     styles.resultDot,
@@ -290,11 +319,7 @@ export default function TopStatisticsCard({
                   ]}
                 />
 
-                <View
-                  style={
-                    styles.resultContent
-                  }
-                >
+                <View style={styles.resultContent}>
                   {loading ? (
                     <ActivityIndicator
                       size="small"
@@ -303,9 +328,7 @@ export default function TopStatisticsCard({
                   ) : (
                     <>
                       <Text
-                        style={
-                          styles.resultValue
-                        }
+                        style={styles.resultValue}
                         numberOfLines={1}
                       >
                         {getCategoryLabel(
@@ -316,9 +339,7 @@ export default function TopStatisticsCard({
                       </Text>
 
                       <Text
-                        style={
-                          styles.resultCount
-                        }
+                        style={styles.resultCount}
                       >
                         {topStatistics
                           ?.top_category
@@ -334,30 +355,20 @@ export default function TopStatisticsCard({
             {/* İL */}
 
             <View style={styles.topCard}>
-              <Text
-                style={styles.topCardLabel}
-              >
+              <Text style={styles.topCardLabel}>
                 En Çok Şikayet Edilen
               </Text>
 
-              <Text
-                style={styles.topCardTitle}
-              >
+              <Text style={styles.topCardTitle}>
                 İl
               </Text>
 
-              <View
-                style={styles.resultWrapper}
-              >
+              <View style={styles.resultWrapper}>
                 <View
                   style={styles.cityDot}
                 />
 
-                <View
-                  style={
-                    styles.resultContent
-                  }
-                >
+                <View style={styles.resultContent}>
                   {loading ? (
                     <ActivityIndicator
                       size="small"
@@ -366,20 +377,16 @@ export default function TopStatisticsCard({
                   ) : (
                     <>
                       <Text
-                        style={
-                          styles.resultValue
-                        }
+                        style={styles.resultValue}
                         numberOfLines={1}
                       >
                         {topStatistics
-                          ?.top_city?.city ??
-                          "Veri yok"}
+                          ?.top_city
+                          ?.city ?? "Veri yok"}
                       </Text>
 
                       <Text
-                        style={
-                          styles.resultCount
-                        }
+                        style={styles.resultCount}
                       >
                         {topStatistics
                           ?.top_city
@@ -393,12 +400,151 @@ export default function TopStatisticsCard({
             </View>
           </View>
         </View>
+
+        {/* =====================================================
+            SAYFA 3 — ÖNCELİKLER
+        ===================================================== */}
+
+        <View
+          style={[
+            styles.page,
+            {
+              width: pageWidth,
+            },
+          ]}
+        >
+          <View style={styles.pageHeader}>
+            <Text style={styles.topTitle}>
+              Bildirim Öncelikleri
+            </Text>
+
+            <Text style={styles.topSubtitle}>
+              Seçilen döneme göre öncelik dağılımı
+            </Text>
+          </View>
+
+          <View style={styles.periodRow}>
+            {(
+              Object.keys(
+                periodLabels
+              ) as StatisticsPeriod[]
+            ).map((item) => {
+              const active =
+                period === item;
+
+              return (
+                <TouchableOpacity
+                  key={item}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    changePeriod(item)
+                  }
+                  style={[
+                    styles.periodChip,
+                    active &&
+                      styles.periodChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.periodChipText,
+                      active &&
+                        styles.periodChipTextActive,
+                    ]}
+                  >
+                    {periodLabels[item]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {loading ? (
+            <View style={styles.priorityLoading}>
+              <ActivityIndicator
+                size="small"
+                color={Colors.primary}
+              />
+            </View>
+          ) : (
+            <View style={styles.priorityList}>
+              {/* YÜKSEK */}
+
+              <View style={styles.priorityItem}>
+                <View
+                  style={[
+                    styles.priorityDot,
+                    styles.highDot,
+                  ]}
+                />
+
+                <Text style={styles.priorityLabel}>
+                  Yüksek
+                </Text>
+
+                <Text style={styles.priorityCount}>
+                  {priorityCounts.high}
+                </Text>
+
+                <Text style={styles.priorityPercentage}>
+                  %{highPercentage}
+                </Text>
+              </View>
+
+              {/* ORTA */}
+
+              <View style={styles.priorityItem}>
+                <View
+                  style={[
+                    styles.priorityDot,
+                    styles.mediumDot,
+                  ]}
+                />
+
+                <Text style={styles.priorityLabel}>
+                  Orta
+                </Text>
+
+                <Text style={styles.priorityCount}>
+                  {priorityCounts.medium}
+                </Text>
+
+                <Text style={styles.priorityPercentage}>
+                  %{mediumPercentage}
+                </Text>
+              </View>
+
+              {/* DÜŞÜK */}
+
+              <View style={styles.priorityItem}>
+                <View
+                  style={[
+                    styles.priorityDot,
+                    styles.lowDot,
+                  ]}
+                />
+
+                <Text style={styles.priorityLabel}>
+                  Düşük
+                </Text>
+
+                <Text style={styles.priorityCount}>
+                  {priorityCounts.low}
+                </Text>
+
+                <Text style={styles.priorityPercentage}>
+                  %{lowPercentage}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* SAYFA GÖSTERGELERİ */}
 
       <View style={styles.pageIndicators}>
-        {[0, 1].map((page) => (
+        {[0, 1, 2].map((page) => (
           <View
             key={page}
             style={[
@@ -444,7 +590,11 @@ function getCategoryLabel(
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: 28,
+    marginBottom: 20,
+  },
+
+  scrollContent: {
+    alignItems: "flex-start",
   },
 
   page: {
@@ -509,10 +659,10 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
 
-  /* SAYFA 2 */
+  /* ORTAK SAYFA */
 
-  topHeader: {
-    marginBottom: 12,
+  pageHeader: {
+    marginBottom: 10,
   },
 
   topTitle: {
@@ -530,14 +680,14 @@ const styles = StyleSheet.create({
   periodRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
     gap: 7,
   },
 
   periodChip: {
     paddingHorizontal: 11,
-    height: 32,
-    borderRadius: 16,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -560,6 +710,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
 
+  /* SAYFA 2 */
+
   topCardsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -567,11 +719,13 @@ const styles = StyleSheet.create({
 
   topCard: {
     width: "48%",
-    minHeight: 178,
+    minHeight: 150,
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 17,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
 
   topCardLabel: {
@@ -591,7 +745,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 15,
+    marginTop: 12,
   },
 
   resultDot: {
@@ -626,14 +780,79 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  /* INDICATORS */
+  /* SAYFA 3 */
+
+  priorityLoading: {
+    height: 150,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  priorityList: {
+    gap: 10,
+  },
+
+  priorityItem: {
+    minHeight: 48,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  priorityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 9,
+  },
+
+  highDot: {
+    backgroundColor: "#DC2626",
+  },
+
+  mediumDot: {
+    backgroundColor: "#F59E0B",
+  },
+
+  lowDot: {
+    backgroundColor: "#22C55E",
+  },
+
+  priorityLabel: {
+    flex: 1,
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  priorityCount: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: "800",
+    marginRight: 14,
+  },
+
+  priorityPercentage: {
+    minWidth: 38,
+    textAlign: "right",
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  /* GÖSTERGELER */
 
   pageIndicators: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 7,
-    marginTop: 1,
+    marginTop: 2,
   },
 
   pageIndicator: {

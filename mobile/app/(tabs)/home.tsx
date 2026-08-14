@@ -285,6 +285,43 @@ export default function HomeScreen() {
       : activeOverviewPage === 1
       ? cityReports
       : municipalityReports;
+  
+  const activeReports =
+    activeOverviewPage === 0
+      ? locationReports
+      : activeOverviewPage === 1
+      ? cityReports
+      : municipalityReports;
+
+  const activeTotalReports =
+    activeReports.length;
+
+  const activeResolvedReports =
+    activeReports.filter(
+      (report) => report.progress === 100
+    ).length;
+
+  const activePendingReports =
+    activeReports.filter(
+      (report) => report.progress < 100
+    ).length;
+
+  const activeAverageProgress =
+    activeTotalReports > 0
+      ? activeReports.reduce(
+          (total, report) =>
+            total + report.progress,
+          0
+        ) / activeTotalReports
+      : 0;
+
+  const activeResolutionRate =
+    activeTotalReports > 0
+      ? (
+          activeResolvedReports /
+          activeTotalReports
+        ) * 100
+      : 0;
   const overviewPageWidth = windowWidth - 40;
 
   return (
@@ -333,7 +370,7 @@ export default function HomeScreen() {
 
             <View>
               <Text style={styles.heroNumber}>
-                %{Math.round(resolutionRate)}
+                %{Math.round(activeResolutionRate)}
               </Text>
 
               <Text style={styles.heroLabel}>çözüm oranı</Text>
@@ -346,10 +383,10 @@ export default function HomeScreen() {
           STATISTICS
       ===================================================== */}
       <TopStatisticsCard
-        totalReports={stats?.total_reports ?? 0}
-        resolvedReports={stats?.resolved_reports ?? 0}
-        pendingReports={stats?.pending_reports ?? 0}
-        averageProgress={stats?.average_progress ?? 0}
+        totalReports={activeTotalReports}
+        resolvedReports={activeResolvedReports}
+        pendingReports={activePendingReports}
+        averageProgress={activeAverageProgress}
       />
 
       {/* =====================================================
@@ -432,9 +469,9 @@ export default function HomeScreen() {
       ===================================================== */}
 
       <ResolutionCard
-        resolutionRate={resolutionRate}
-        resolvedReports={stats?.resolved_reports ?? 0}
-        pendingReports={stats?.pending_reports ?? 0}
+        resolutionRate={activeResolutionRate}
+        resolvedReports={activeResolvedReports}
+        pendingReports={activePendingReports}
       />
 
       {/* =====================================================

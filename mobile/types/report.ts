@@ -3,8 +3,16 @@ export type Report = {
   title: string;
   description?: string;
   category: string;
+
   latitude: number;
   longitude: number;
+
+  city?: string | null;
+  municipality?: string | null;
+  district?: string | null;
+  neighborhood?: string | null;
+  address?: string | null;
+
   status: string;
   progress: number;
   priority: string;

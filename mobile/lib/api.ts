@@ -59,6 +59,12 @@ export type TopStatistics = {
     city: string;
     count: number;
   } | null;
+
+  priority_counts: {
+    high: number;
+    medium: number;
+    low: number;
+  };
 };
 
 // ---------------------------------------------------------------------------
