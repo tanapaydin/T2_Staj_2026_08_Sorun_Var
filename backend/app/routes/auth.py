@@ -25,7 +25,7 @@ def register(user_create: UserRegister, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Bu e-posta zaten kayıtlı.",
         )
-
+ 
     new_user = User(
         name=user_create.name,
         email=user_create.email.lower(),

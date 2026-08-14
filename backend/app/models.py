@@ -30,6 +30,11 @@ class User(Base):
 
     reports = relationship("Report", back_populates="user")
     comments = relationship("Comment", back_populates="user")
+    report_follows = relationship(
+        "ReportFollow",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class Report(Base):
@@ -46,6 +51,11 @@ class Report(Base):
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     category = Column(String, nullable=False)
+    city = Column(String, nullable=True)
+    municipality = Column(String, nullable=True)
+    district = Column(String, nullable=True)
+    neighborhood = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
 
     latitude = Column(DOUBLE_PRECISION, nullable=False)
     longitude = Column(DOUBLE_PRECISION, nullable=False)
@@ -56,6 +66,12 @@ class Report(Base):
 
     view_count = Column(Integer, default=0)
 
+    follower_count = Column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),
@@ -64,20 +80,72 @@ class Report(Base):
     )
 
     user = relationship("User", back_populates="reports")
+
     images = relationship(
         "ReportImage",
         back_populates="report",
         cascade="all, delete-orphan",
     )
+
     comments = relationship(
         "Comment",
         back_populates="report",
         cascade="all, delete-orphan",
     )
+
     history = relationship(
         "ReportStatusHistory",
         back_populates="report",
         cascade="all, delete-orphan",
+    )
+
+    followers = relationship(
+        "ReportFollow",
+        back_populates="report",
+        cascade="all, delete-orphan",
+    )
+
+
+class ReportFollow(Base):
+    __tablename__ = "report_follows"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+    )
+
+    report_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "reports.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    created_at = Column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    report = relationship(
+        "Report",
+        back_populates="followers",
+    )
+
+    user = relationship(
+        "User",
+        back_populates="report_follows",
     )
 
 

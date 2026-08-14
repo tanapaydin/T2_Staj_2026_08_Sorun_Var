@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { Platform, StyleSheet, View, ActivityIndicator, Pressable } from "react-native";
 
 import { useReports } from "../../hooks/useReports";
@@ -42,6 +43,16 @@ if (!isWeb) {
 export default function MapScreen() {
   const mapRef = useRef<any>(null);
 
+  const {
+    reportId,
+    latitude: reportLatitude,
+    longitude: reportLongitude,
+  } = useLocalSearchParams<{
+    reportId?: string;
+    latitude?: string;
+    longitude?: string;
+  }>();
+
   const { userLocation, currentCity } =
     useUserLocation();
   const [search, setSearch] = useState("");
@@ -75,6 +86,21 @@ export default function MapScreen() {
     showAllCities,
   } = useMapCityFilter(reports, currentCity);
 
+  useEffect(() => {
+    if (!reportId) {
+      return;
+    }
+
+    const report = visibleReports.find(
+      (item) => String(item.id) === String(reportId)
+    );
+
+    if (report) {
+      setSelectedCity(null);
+      setSelectedReport(report);
+    }
+  }, [reportId, visibleReports]);
+
   const [filterVisible, setFilterVisible] = useState(false);
 
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -94,6 +120,10 @@ export default function MapScreen() {
   useEffect(() => {
     if (!userLocation || isWeb) return;
 
+    if (reportLatitude && reportLongitude){
+      return;
+    }
+
     const timer = setTimeout(() => {
       mapRef.current?.animateToRegion(
         {
@@ -107,7 +137,48 @@ export default function MapScreen() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [userLocation]);
+  }, [
+    userLocation,
+    reportLatitude,
+    reportLongitude,
+  ]);
+
+  useEffect(() => {
+    if (
+      isWeb ||
+      !reportLatitude ||
+      !reportLongitude
+    ) {
+      return;
+    }
+
+    const latitude = Number(reportLatitude);
+    const longitude = Number(reportLongitude);
+
+    if (
+      Number.isNaN(latitude) ||
+      Number.isNaN(longitude)
+    ) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      mapRef.current?.animateToRegion(
+        {
+          latitude,
+          longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        800
+      );
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [
+    reportLatitude,
+    reportLongitude,
+  ]);
 
   useEffect(() => {
     const timeout = setTimeout(async () => {
@@ -394,6 +465,19 @@ export default function MapScreen() {
       <ReportCard
         report={selectedReport}
         onClose={() => setSelectedReport(null)}
+        onGoToLocation={() => {
+          if (!selectedReport) return;
+
+          mapRef.current?.animateToRegion(
+            {
+              latitude: selectedReport.latitude,
+              longitude: selectedReport.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            },
+            800
+          );
+        }}
       />
       <CitySummaryCard
         city={selectedCity}
