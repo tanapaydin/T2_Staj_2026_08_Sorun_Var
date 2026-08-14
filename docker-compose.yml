@@ -1,5 +1,4 @@
 services:
-
   db:
     image: postgres:16
     container_name: sorunburada_db
@@ -16,7 +15,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-
   backend:
     build: ./backend
     container_name: sorunburada_backend
@@ -27,6 +25,7 @@ services:
 
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/sorunburada
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
 
     env_file:
       - ./backend/.env
@@ -36,7 +35,6 @@ services:
 
     depends_on:
       - db
-
 
 volumes:
   postgres_data:
