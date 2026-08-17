@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AuthBackground from "../components/auth/AuthBackground";
 import { useRouter } from "expo-router";
 import { getAuthData } from "../lib/auth";
 
@@ -30,7 +31,7 @@ export default function Index() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AuthBackground>
       <Text style={styles.title}>Sorun Var</Text>
       <Text style={styles.subtitle}>Şikayetlerinizi hızlıca bildirin ve takip edin.</Text>
 
@@ -45,7 +46,7 @@ export default function Index() {
       <Pressable style={styles.guestButton} onPress={() => router.replace("/(tabs)/map")}>
         <Text style={styles.guestButtonText}>Misafir Olarak Devam Et</Text>
       </Pressable>
-    </SafeAreaView>
+    </AuthBackground>
   );
 }
 
