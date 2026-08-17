@@ -34,6 +34,7 @@ export default function ProfileScreen() {
       </SafeAreaView>
     );
   }
+  
 
   if (!auth) {
     return (

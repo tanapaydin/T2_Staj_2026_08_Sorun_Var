@@ -2,6 +2,7 @@
 
 ## Authentication
 
+
 ### POST /auth/register
 
 Create a new account.

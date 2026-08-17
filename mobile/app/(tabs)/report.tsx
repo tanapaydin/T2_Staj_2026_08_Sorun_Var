@@ -12,6 +12,10 @@ import {
   View,
   Modal,
 } from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import MapView, { Circle, Marker, MapPressEvent } from "react-native-maps";

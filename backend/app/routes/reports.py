@@ -1,21 +1,24 @@
 from datetime import datetime, timedelta
+from uuid import UUID
 
 import requests
 
 from fastapi import (
     APIRouter,
     Depends,
+    HTTPException,
     Query,
     status,
 )
 
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Report, User
+from app.models import Report, User, ReportFollow
 from app.schemas import ReportCreate, ReportResponse
+from app.services.geocoding import get_location_details
 
 
 router = APIRouter(
@@ -35,6 +38,9 @@ def list_reports(
     priority: str | None = None,
     date: str | None = None,
     sort: str = "newest",
+
+    city: str | None = None,
+    district: str | None = None,
 
     # Pagination
     skip: int = Query(
@@ -82,6 +88,25 @@ def list_reports(
     if priority:
         query = query.filter(
             Report.priority == priority
+        )
+
+
+    # --------------------------------------------------------
+    # City filter
+    # --------------------------------------------------------
+
+    if city:
+        query = query.filter(
+            Report.city == city
+        )
+
+    # --------------------------------------------------------
+    # District filter
+    # --------------------------------------------------------
+
+    if district:
+        query = query.filter(
+            Report.district == district
         )
 
     # --------------------------------------------------------
@@ -139,9 +164,6 @@ def list_reports(
     else:
 
         # Default: newest
-        #
-        # created_at aynı olan kayıtların sırasının
-        # değişmemesi için id de kullanılıyor.
         query = query.order_by(
             Report.created_at.desc(),
             Report.id.desc(),
@@ -177,12 +199,22 @@ def list_reports(
             "id": str(report.id),
             "title": report.title,
             "category": report.category,
+
             "latitude": report.latitude,
             "longitude": report.longitude,
+
+            "city": report.city,
+            "municipality": report.municipality,
+            "district": report.district,
+            "neighborhood": report.neighborhood,
+            "address": report.address,
+
             "status": report.status,
             "progress": report.progress,
             "priority": report.priority,
             "view_count": report.view_count,
+            "follower_count": report.follower_count or 0,
+
             "created_at": (
                 report.created_at.isoformat()
                 if report.created_at
@@ -209,13 +241,48 @@ def create_report(
         get_current_user
     ),
 ):
+    location = {
+        "city": None,
+        "municipality": None,
+        "district": None,
+        "neighborhood": None,
+        "address": None,
+    }
+
+    try:
+        location = get_location_details(
+            report_create.latitude,
+            report_create.longitude,
+        )
+
+        print(
+            "GEOLOCATION RESULT:",
+            location,
+        )
+
+    except Exception as error:
+        # Reverse geocoding başarısız olursa
+        # rapor oluşturmayı engellemiyoruz.
+        print(
+            "GEOLOCATION ERROR:",
+            error,
+        )
+
     report = Report(
         user_id=current_user.id,
+
         title=report_create.title,
         description=report_create.description,
         category=report_create.category,
+
         latitude=report_create.latitude,
         longitude=report_create.longitude,
+
+        city=location["city"],
+        municipality=location["municipality"],
+        district=location["district"],
+        neighborhood=location["neighborhood"],
+        address=location["address"],
     )
 
     db.add(report)
@@ -318,6 +385,173 @@ def get_statistics(
 
 
 # ============================================================
+# TOP STATISTICS
+# ============================================================
+
+@router.get("/statistics/top")
+def get_top_statistics(
+    period: str = "all",
+    db: Session = Depends(get_db),
+):
+    if period not in {
+        "all",
+        "month",
+        "week",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Geçersiz dönem. "
+                "all, month veya week "
+                "kullanılmalı."
+            ),
+        )
+
+    query = db.query(Report)
+
+    # --------------------------------------------------------
+    # PERIOD FILTER
+    # --------------------------------------------------------
+
+    if period == "week":
+        start = (
+            datetime.utcnow()
+            - timedelta(days=7)
+        )
+
+        query = query.filter(
+            Report.created_at >= start
+        )
+
+    elif period == "month":
+        start = (
+            datetime.utcnow()
+            - timedelta(days=30)
+        )
+
+        query = query.filter(
+            Report.created_at >= start
+        )
+
+    # --------------------------------------------------------
+    # EN ÇOK ŞİKAYET EDİLEN KATEGORİ
+    # --------------------------------------------------------
+
+    top_category = (
+        query
+        .with_entities(
+            Report.category,
+            func.count(
+                Report.id
+            ).label("count"),
+        )
+        .group_by(
+            Report.category
+        )
+        .order_by(
+            func.count(
+                Report.id
+            ).desc()
+        )
+        .first()
+    )
+
+    # --------------------------------------------------------
+    # EN ÇOK ŞİKAYET OLAN İL
+    # --------------------------------------------------------
+
+    top_city = (
+        query
+        .filter(
+            Report.city.isnot(None),
+            Report.city != "",
+        )
+        .with_entities(
+            Report.city,
+            func.count(
+                Report.id
+            ).label("count"),
+        )
+        .group_by(
+            Report.city
+        )
+        .order_by(
+            func.count(
+                Report.id
+            ).desc()
+        )
+        .first()
+    )
+
+    # --------------------------------------------------------
+    # ÖNCELİK DAĞILIMI
+    # --------------------------------------------------------
+
+    priority_results = (
+        query
+        .with_entities(
+            Report.priority,
+            func.count(
+                Report.id
+            ).label("count"),
+        )
+        .group_by(
+            Report.priority
+        )
+        .all()
+    )
+
+    # Her zaman tüm önceliklerin
+    # response içinde bulunmasını sağlıyoruz.
+    priority_counts = {
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+    }
+
+    for priority, count in priority_results:
+        if priority in priority_counts:
+            priority_counts[
+                priority
+            ] = count
+
+    # --------------------------------------------------------
+    # RESPONSE
+    # --------------------------------------------------------
+
+    result = {
+        "top_category": (
+            {
+                "category": top_category[0],
+                "count": top_category[1],
+            }
+            if top_category
+            else None
+        ),
+
+        "top_city": (
+            {
+                "city": top_city[0],
+                "count": top_city[1],
+            }
+            if top_city
+            else None
+        ),
+
+        "priority_counts": (
+            priority_counts
+        ),
+    }
+
+    print(
+        "TOP STATISTICS:",
+        result,
+    )
+
+    return result
+
+
+# ============================================================
 # CATEGORY STATISTICS
 # ============================================================
 
@@ -332,9 +566,9 @@ def get_category_statistics(
     results = (
         db.query(
             Report.category,
-            func.count(Report.id).label(
-                "count"
-            ),
+            func.count(
+                Report.id
+            ).label("count"),
         )
         .group_by(
             Report.category
@@ -534,6 +768,134 @@ def search_suggestions(
 
 
 # ============================================================
+# FOLLOW REPORT
+# ============================================================
+
+@router.post("/{report_id}/follow")
+def follow_report(
+    report_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),
+):
+    report = (
+        db.query(Report)
+        .filter(
+            Report.id == report_id
+        )
+        .first()
+    )
+
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    existing_follow = (
+        db.query(ReportFollow)
+        .filter(
+            ReportFollow.report_id
+            == report_id,
+            ReportFollow.user_id
+            == current_user.id,
+        )
+        .first()
+    )
+
+    if existing_follow:
+        return {
+            "following": True,
+            "follower_count":
+                report.follower_count
+                or 0,
+        }
+
+    follow = ReportFollow(
+        report_id=report_id,
+        user_id=current_user.id,
+    )
+
+    db.add(follow)
+
+    report.follower_count = (
+        report.follower_count or 0
+    ) + 1
+
+    db.commit()
+    db.refresh(report)
+
+    return {
+        "following": True,
+        "follower_count":
+            report.follower_count,
+    }
+
+
+# ============================================================
+# UNFOLLOW REPORT
+# ============================================================
+
+@router.delete("/{report_id}/follow")
+def unfollow_report(
+    report_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),
+):
+    report = (
+        db.query(Report)
+        .filter(
+            Report.id == report_id
+        )
+        .first()
+    )
+
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    existing_follow = (
+        db.query(ReportFollow)
+        .filter(
+            ReportFollow.report_id
+            == report_id,
+            ReportFollow.user_id
+            == current_user.id,
+        )
+        .first()
+    )
+
+    if not existing_follow:
+        return {
+            "following": False,
+            "follower_count":
+                report.follower_count
+                or 0,
+        }
+
+    db.delete(existing_follow)
+
+    report.follower_count = max(
+        (report.follower_count or 0) - 1,
+        0,
+    )
+
+    db.commit()
+    db.refresh(report)
+
+    return {
+        "following": False,
+        "follower_count":
+            report.follower_count,
+    }
+
+
+# ============================================================
 # GET SINGLE REPORT
 # ============================================================
 
@@ -560,17 +922,29 @@ def get_report(
         "title": report.title,
         "description": report.description,
         "category": report.category,
+
         "latitude": report.latitude,
         "longitude": report.longitude,
+
+        "city": report.city,
+        "municipality": report.municipality,
+        "district": report.district,
+        "neighborhood": report.neighborhood,
+        "address": report.address,
+
         "status": report.status,
         "progress": report.progress,
         "priority": report.priority,
         "view_count": report.view_count,
+        "follower_count":
+            report.follower_count or 0,
+
         "created_at": (
             report.created_at.isoformat()
             if report.created_at
             else None
         ),
+
         "updated_at": (
             report.updated_at.isoformat()
             if report.updated_at

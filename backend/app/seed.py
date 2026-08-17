@@ -10,7 +10,7 @@ def seed():
         print("Seed already exists.")
         db.close()
         return
-
+ 
     # Demo kullanıcı
     demo_user = User(
         name="Demo User",

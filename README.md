@@ -142,3 +142,4 @@ Database: sorunburada
 User: postgres
 Password: postgres
 ```
+

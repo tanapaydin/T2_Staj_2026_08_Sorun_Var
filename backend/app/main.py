@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import reports, auth, users, comments, ai
-
+ 
 app = FastAPI(title="Sorun Var API")
 
 app.add_middleware(
