@@ -1,91 +1,48 @@
 # Architecture
 
-## System Overview
+## System overview
 
-```
-React Native (Expo)
-        │
-        │ HTTP
-        ▼
-FastAPI
-        │
-        ├── PostgreSQL
-        ├── Supabase Storage
-        └── OpenAI API
-```
-
-## Request Flow
-
-### Creating a report
-
-1. User captures photo
-2. Mobile uploads image
-3. Backend stores image in Supabase Storage
-4. AI analyzes image
-5. Category, title, and description are generated
-6. Report is saved in PostgreSQL
-7. Mobile receives report response
-
-## Main Modules
-
-### Mobile
-
-* Authentication
-* Map
-* Report creation
-* Report detail
-* Profile
-* Notifications
-
-### Backend
-
-* Auth
-* Reports
-* Comments
-* AI
-* Storage
-* Users
-
-### Database
-
-* users
-* reports
-* report_images
-* comments
-* report_status_history
-
-## Storage Strategy
-
-Images are never stored directly in PostgreSQL.
-
-Only image URLs are stored.
-
-```
-Supabase Storage
-       │
-       ▼
-image_url
-       │
-       ▼
-PostgreSQL
+```text
+Expo React Native application
+        |
+        | HTTP + JWT bearer token
+        v
+FastAPI backend
+        |
+        +-- PostgreSQL
+        +-- Geoapify (reverse geocoding)
+        +-- Nominatim (location search)
+        +-- OpenAI (image analysis)
 ```
 
-## Authentication
+## Mobile application
 
-JWT access tokens
+The mobile application uses Expo Router for file-based routing and React Native for the interface. It uses:
 
-JWT refresh tokens
+- `expo-location` for user coordinates;
+- `react-native-maps` and marker clustering for the map;
+- AsyncStorage for the saved authentication token;
+- `mobile/lib/api.ts` for backend requests;
+- `mobile/theme` and reusable components for shared UI styles.
 
-Email verification
+## Report flow
 
-Password reset
+1. The user selects a category, description, location, and optionally a photo for AI assistance.
+2. The app sends the report data to `POST /reports` with a JWT token.
+3. The backend reverse-geocodes the coordinates through Geoapify.
+4. The backend stores the report and its city, district, neighborhood, and address data in PostgreSQL.
+5. The mobile app fetches reports, statistics, and location-filtered report lists through the API.
 
-## Deployment
+The AI image-analysis endpoint analyzes an uploaded image for category/description assistance. Persistent report-image storage is not currently part of the report creation API.
 
-Backend: Docker container
+## Backend modules
 
-Database: Docker PostgreSQL
+- `auth`: registration and login;
+- `reports`: report creation, listing, statistics, search, and follows;
+- `users`: current profile, followed reports, and account deletion;
+- `comments`: listing and creating comments;
+- `ai`: image analysis, description/category suggestion, and text moderation.
 
-Storage: Supabase
+## Deployment and local development
 
-Mobile: Expo / EAS Build
+Docker Compose starts the FastAPI backend on port `8000` and PostgreSQL on port `5432`. The Expo application runs separately and receives its API address from `EXPO_PUBLIC_API_URL`.

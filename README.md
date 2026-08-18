@@ -94,6 +94,8 @@ Swagger documentation:
 http://localhost:8000/docs
 ```
 
+`localhost` works on the computer running the backend. A physical phone must use that computer's local network IP address instead.
+
 ## Mobile Setup
 
 Open a new terminal and install the mobile dependencies:
@@ -128,7 +130,7 @@ Replace `YOUR_LOCAL_IP` with the local IP address of the machine running the bac
 Start the Expo development server:
 
 ```bash
-npx expo start
+npm start
 ```
 
 ## PostgreSQL
