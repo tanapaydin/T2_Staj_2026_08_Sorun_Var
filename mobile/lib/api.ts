@@ -11,6 +11,8 @@ export type ReportFilters = {
   priority?: "high" | "medium" | "low";
   date?: "today" | "7d" | "30d";
   sort?: "newest" | "oldest" | "most_viewed";
+  city?: string;
+  district?: string;
 
   // Pagination
   skip?: number;
@@ -30,6 +32,7 @@ export type LocationSuggestion = {
   latitude: number;
   longitude: number;
 };
+
 
 export type ReportStatistics = {
   total_reports: number;
@@ -137,6 +140,14 @@ export async function fetchReports(
       "sort",
       filters.sort
     );
+  }
+
+  if (filters?.city) {
+    params.append("city", filters.city);
+  }
+
+  if (filters?.district) {
+    params.append("district", filters.district);
   }
 
   // Pagination

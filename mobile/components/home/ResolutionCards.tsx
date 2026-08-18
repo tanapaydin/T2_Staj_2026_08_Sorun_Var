@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { Colors } from "../../theme/colors";
+import { Colors, HomeTokens, Radius, Shadows, Spacing, Typography } from "../../theme";
 
 type ResolutionCardProps = {
   resolutionRate: number;
@@ -64,14 +64,14 @@ export default function ResolutionCard({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 28,
+    marginBottom: HomeTokens.sectionMarginBottom,
   },
 
   resolutionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 20,
-    elevation: 2,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    ...Shadows.sm,
   },
 
   resolutionHeader: {
@@ -81,46 +81,44 @@ const styles = StyleSheet.create({
   },
 
   resolutionTitle: {
-    color: "#0F172A",
-    fontSize: 17,
-    fontWeight: "800",
+    ...Typography.heading,
+    color: Colors.text,
   },
 
   resolutionSubtitle: {
-    color: "#64748B",
-    fontSize: 13,
+    ...Typography.label,
+    color: Colors.textMuted,
     marginTop: 3,
   },
 
   resolutionValue: {
     color: Colors.resolution.text,
-    fontSize: 24,
-    fontWeight: "800",
+    ...Typography.titleLarge,
   },
 
   progressTrack: {
     height: 10,
     backgroundColor: Colors.resolution.track,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     overflow: "hidden",
-    marginTop: 18,
+    marginTop: Spacing.lg + 2,
   },
 
   progressFill: {
     height: "100%",
-    backgroundColor: "#86C99E",
-    borderRadius: 999,
+    backgroundColor: Colors.resolution.fill,
+    borderRadius: Radius.full,
   },
 
   resolutionFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    marginTop: Spacing.sm,
   },
 
   resolutionFooterText: {
-    color: "#64748B",
-    fontSize: 12,
+    ...Typography.meta,
+    color: Colors.textMuted,
     fontWeight: "600",
   },
 });

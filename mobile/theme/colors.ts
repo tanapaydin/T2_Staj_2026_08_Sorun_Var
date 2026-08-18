@@ -25,6 +25,13 @@ export const Colors = {
   border: "#E2E8F0",
   borderLight: "#F1F5F9",
 
+  // Overlays and map controls
+  overlay: "rgba(15, 23, 42, 0.40)",
+  overlayLight: "rgba(255, 255, 255, 0.82)",
+  overlayLoading: "rgba(255, 255, 255, 0.80)",
+  shadow: "#000000",
+  transparent: "transparent",
+
   // Home
   heroBackground: "#E8F1FF",
   heroText: "#1E3A5F",

@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Platform, StyleSheet, View, ActivityIndicator, Pressable } from "react-native";
+import { Platform, StyleSheet, View, ActivityIndicator } from "react-native";
 
 import { useReports } from "../../hooks/useReports";
 import CitySummaryCard from "../../components/map/CitySummaryCard";
 
 import {
-  AppButton,
   AppCard,
   AppText,
 } from "../../components/common";
 
 import {
   Colors,
+  MapTokens,
   Spacing,
 } from "../../theme";
 
@@ -24,9 +24,12 @@ import {
 import { Report } from "../../types/report";
 
 import FilterModal from "../../components/map/FilterModal";
-import MapMarkers from "../../components/map/MapMarkers";
+import MapMarkers, {
+  CityClusterDetails,
+} from "../../components/map/MapMarkers";
 import ReportCard from "../../components/map/ReportCard";
 import SearchBar from "../../components/map/SearchBar";
+import MapControls from "../../components/map/MapControls";
 import { useUserLocation } from "../../hooks/useUserLocation";
 import { useMapCityFilter } from "../../hooks/useMapCityFilter";
 
@@ -58,10 +61,8 @@ export default function MapScreen() {
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [selectedCity, setSelectedCity] = useState<{
-  name: string;
-  count: number;
-} | null>(null);
+  const [selectedCity, setSelectedCity] =
+    useState<CityClusterDetails | null>(null);
   const [region, setRegion] = useState({
     latitude: 39.925,
     longitude: 32.8369,
@@ -297,49 +298,13 @@ export default function MapScreen() {
         onClear={clearSearch}
       />
 
-      {showSearchAreaButton && (
-        <View style={styles.searchAreaButtonContainer}>
-          <AppButton
-            title="Bu bölgedeki şikayetleri göster"
-            onPress={showSearchArea}
-          />
-        </View>
-      )}
-
-      {/* Filtre */}
-      <View style={styles.filterBar}>
-        <View style={styles.filterRow}>
-          <AppButton
-            title="Filtre"
-            variant="secondary"
-            onPress={() => setFilterVisible(true)}
-            style={styles.filterButton}
-          />
-
-          {cityFilterMode === "search" && (
-            <Pressable
-              onPress={showCurrentCity}
-              style={styles.searchModeButton}
-            >
-              <AppText
-                variant="bodyMedium"
-                color={Colors.textSecondary}
-                style={styles.searchModeText}
-              >
-                Bölgede arama
-              </AppText>
-
-              <AppText
-                variant="bodyMedium"
-                color={Colors.textSecondary}
-                style={styles.searchModeClose}
-              >
-                ×
-              </AppText>
-            </Pressable>
-          )}
-        </View>
-      </View>
+      <MapControls
+        showSearchAreaButton={showSearchAreaButton}
+        onShowSearchArea={showSearchArea}
+        isSearchMode={cityFilterMode === "search"}
+        onShowCurrentCity={showCurrentCity}
+        onOpenFilters={() => setFilterVisible(true)}
+      />
 
       {/* Harita */}
       {isWeb ? (
@@ -405,12 +370,12 @@ export default function MapScreen() {
             >
               <View
                 style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: 9,
-                  backgroundColor: "#2563EB",
-                  borderWidth: 3,
-                  borderColor: "#FFFFFF",
+                  width: MapTokens.userMarkerSize,
+                  height: MapTokens.userMarkerSize,
+                  borderRadius: MapTokens.userMarkerSize / 2,
+                  backgroundColor: Colors.primary,
+                  borderWidth: MapTokens.userMarkerBorderWidth,
+                  borderColor: Colors.textInverse,
                 }}
               />
             </Marker>
@@ -507,7 +472,7 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.8)",
+    backgroundColor: Colors.overlayLoading,
   },
 
   loadingText: {
@@ -517,7 +482,7 @@ const styles = StyleSheet.create({
   webFallback: {
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     backgroundColor: Colors.background,
   },
 
@@ -534,62 +499,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
-  clusterContainer: {
-  width: 44,
-  height: 44,
-  borderRadius: 22,
-  backgroundColor: Colors.primary,
-  justifyContent: "center",
-  alignItems: "center",
-  borderWidth: 2,
-  borderColor: "#FFFFFF",
-},
-searchAreaButtonContainer: {
-  position: "absolute",
-  top: 118,
-  left: 20,
-  right: 20,
-  alignItems: "center",
-  zIndex: 1000,
-  elevation: 10,
-},
-filterBar: {
-  position: "absolute",
-  top: 120,
-  left: 20,
-  right: 20,
-  zIndex: 18,
-},
-
-filterRow: {
-  flexDirection: "row",
-  alignItems: "center",
-},
-
-filterButton: {
-  alignSelf: "flex-start",
-},
-
-searchModeButton: {
-  marginLeft: 8,
-  height: 40,
-  paddingLeft: 14,
-  paddingRight: 10,
-  borderRadius: 20,
-  backgroundColor: "rgba(255, 255, 255, 0.82)",
-  borderWidth: 1,
-  borderColor: "rgba(0, 0, 0, 0.08)",
-  flexDirection: "row",
-  alignItems: "center",
-},
-
-searchModeText: {
-  fontSize: 13,
-},
-
-searchModeClose: {
-  marginLeft: 8,
-  fontSize: 18,
-  lineHeight: 20,
-},
 });

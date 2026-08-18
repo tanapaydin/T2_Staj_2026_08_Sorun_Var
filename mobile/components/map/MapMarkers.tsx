@@ -1,5 +1,9 @@
 import React from "react";
-import { Platform, View, StyleSheet } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import { Report } from "../../types/report";
 import { getMarkerColor } from "../../utils/map";
@@ -13,12 +17,43 @@ if (Platform.OS !== "web") {
   Marker = maps.Marker;
 }
 
+// ============================================================
+// TYPES
+// ============================================================
+
+export type CityCategoryStat = {
+  category: string;
+  count: number;
+};
+
+export type CityDistrictStat = {
+  district: string;
+  count: number;
+};
+
+export type CityClusterDetails = {
+  name: string;
+  count: number;
+  latitude: number;
+  longitude: number;
+  districts: CityDistrictStat[];
+  categories: CityCategoryStat[];
+};
+
 type Props = {
   reports: Report[];
-  onSelectReport: (report: Report) => void;
-  onSelectCity: (city: { name: string; count: number }) => void;
+  onSelectReport: (
+    report: Report
+  ) => void;
+  onSelectCity: (
+    city: CityClusterDetails
+  ) => void;
   latitudeDelta: number;
 };
+
+// ============================================================
+// COMPONENT
+// ============================================================
 
 export default function MapMarkers({
   reports,
@@ -26,9 +61,18 @@ export default function MapMarkers({
   onSelectCity,
   latitudeDelta,
 }: Props) {
-  if (Platform.OS === "web") return null;
+  if (Platform.OS === "web") {
+    return null;
+  }
 
-  // Yakın zoom: normal markerlar
+  // ==========================================================
+  // YAKIN ZOOM
+  // ==========================================================
+  //
+  // Yakınlaşınca şehir cluster'ı yerine
+  // gerçek rapor markerlarını gösteriyoruz.
+  //
+
   if (latitudeDelta < 2.5) {
     return (
       <>
@@ -39,16 +83,28 @@ export default function MapMarkers({
               latitude: report.latitude,
               longitude: report.longitude,
             }}
-            pinColor={getMarkerColor(report.category)}
-            onPress={() => onSelectReport(report)}
+            pinColor={getMarkerColor(
+              report.category
+            )}
+            onPress={() =>
+              onSelectReport(report)
+            }
           />
         ))}
       </>
     );
   }
 
-  // Uzak zoom: şehir bazlı özet markerlar
-  const cityGroups = groupReportsByCity(reports);
+  // ==========================================================
+  // UZAK ZOOM
+  // ==========================================================
+  //
+  // Uzaklaşınca şehir bazlı özet markerları
+  // gösteriyoruz.
+  //
+
+  const cityGroups =
+    groupReportsByCity(reports);
 
   return (
     <>
@@ -60,18 +116,25 @@ export default function MapMarkers({
             longitude: city.longitude,
           }}
           onPress={() =>
-            onSelectCity({
-              name: city.name,
-              count: city.count,
-            })
+            onSelectCity(city)
           }
         >
-          <View style={styles.clusterContainer}>
-            <View style={styles.clusterInner}>
+          <View
+            style={
+              styles.clusterContainer
+            }
+          >
+            <View
+              style={
+                styles.clusterInner
+              }
+            >
               <AppText
                 variant="bodyMedium"
                 color="#FFFFFF"
-                style={styles.clusterText}
+                style={
+                  styles.clusterText
+                }
               >
                 {city.count}
               </AppText>
@@ -83,107 +146,223 @@ export default function MapMarkers({
   );
 }
 
-function groupReportsByCity(reports: Report[]) {
+// ============================================================
+// ŞEHİR GRUPLAMA
+// ============================================================
+
+function groupReportsByCity(
+  reports: Report[]
+): CityClusterDetails[] {
   const groups: Record<
     string,
-    {
-      name: string;
-      latitude: number;
-      longitude: number;
-      count: number;
-    }
+    CityClusterDetails
   > = {};
 
   for (const report of reports) {
-    const city = detectCity(report.latitude, report.longitude);
+    // --------------------------------------------------------
+    // ŞEHİR
+    // --------------------------------------------------------
+    //
+    // Artık koordinattan şehir tahmini yapmıyoruz.
+    // Backend'den gelen city alanını kullanıyoruz.
+    //
+
+    const city =
+      report.city?.trim() ||
+      "Bilinmeyen";
+
+    // --------------------------------------------------------
+    // İLK KAYIT
+    // --------------------------------------------------------
 
     if (!groups[city]) {
       groups[city] = {
         name: city,
-        latitude: report.latitude,
-        longitude: report.longitude,
+
+        latitude:
+          report.latitude,
+
+        longitude:
+          report.longitude,
+
         count: 0,
+
+        districts: [],
+
+        categories: [],
       };
     }
 
-    groups[city].count += 1;
+    const group =
+      groups[city];
+
+    // --------------------------------------------------------
+    // TOPLAM RAPOR
+    // --------------------------------------------------------
+
+    group.count += 1;
+
+    // --------------------------------------------------------
+    // ŞEHİR MERKEZİ
+    // --------------------------------------------------------
+    //
+    // Şehir marker'ı tek bir raporun konumuna değil,
+    // o şehirdeki raporların ortalama koordinatına gider.
+    //
+
+    group.latitude =
+      (
+        group.latitude *
+          (group.count - 1) +
+        report.latitude
+      ) /
+      group.count;
+
+    group.longitude =
+      (
+        group.longitude *
+          (group.count - 1) +
+        report.longitude
+      ) /
+      group.count;
+
+    // --------------------------------------------------------
+    // İLÇE
+    // --------------------------------------------------------
+
+    const district =
+      report.district?.trim();
+
+    if (district) {
+      const existingDistrict =
+        group.districts.find(
+          (item) =>
+            item.district ===
+            district
+        );
+
+      if (existingDistrict) {
+        existingDistrict.count += 1;
+      } else {
+        group.districts.push({
+          district,
+          count: 1,
+        });
+      }
+    }
+
+    // --------------------------------------------------------
+    // KATEGORİ
+    // --------------------------------------------------------
+
+    const category =
+      report.category?.trim();
+
+    if (category) {
+      const existingCategory =
+        group.categories.find(
+          (item) =>
+            item.category ===
+            category
+        );
+
+      if (existingCategory) {
+        existingCategory.count += 1;
+      } else {
+        group.categories.push({
+          category,
+          count: 1,
+        });
+      }
+    }
   }
 
-  return Object.values(groups);
+  // ==========================================================
+  // SIRALAMA
+  // ==========================================================
+  //
+  // En fazla raporu olan ilçe/kategori üstte.
+  //
+
+  return Object.values(
+    groups
+  ).map((city) => ({
+    ...city,
+
+    districts: [
+      ...city.districts,
+    ].sort(
+      (a, b) =>
+        b.count - a.count
+    ),
+
+    categories: [
+      ...city.categories,
+    ].sort(
+      (a, b) =>
+        b.count - a.count
+    ),
+  }));
 }
 
-function detectCity(lat: number, lon: number) {
-  // Ankara
-  if (
-    lat > 39.5 &&
-    lat < 40.2 &&
-    lon > 32.4 &&
-    lon < 33.2
-  ) {
-    return "Ankara";
-  }
+// ============================================================
+// STYLES
+// ============================================================
 
-  // İstanbul
-  if (
-    lat > 40.8 &&
-    lat < 41.3 &&
-    lon > 28.5 &&
-    lon < 29.5
-  ) {
-    return "İstanbul";
-  }
+const styles =
+  StyleSheet.create({
+    clusterContainer: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
 
-  // İzmir
-  if (
-    lat > 38.2 &&
-    lat < 38.6 &&
-    lon > 26.8 &&
-    lon < 27.4
-  ) {
-    return "İzmir";
-  }
+      backgroundColor:
+        Colors.primary,
 
-  return "Diğer";
-}
+      justifyContent:
+        "center",
 
-const styles = StyleSheet.create({
-  clusterContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+      alignItems:
+        "center",
 
-    backgroundColor: Colors.primary,
+      borderWidth: 2,
+      borderColor:
+        "#FFFFFF",
 
-    justifyContent: "center",
-    alignItems: "center",
+      shadowColor:
+        "#000000",
 
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
 
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
+      shadowOpacity:
+        0.22,
+
+      shadowRadius:
+        4,
+
+      elevation: 5,
     },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
 
-    elevation: 5,
-  },
+    clusterInner: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
 
-  clusterInner: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+      justifyContent:
+        "center",
 
-    justifyContent: "center",
-    alignItems: "center",
+      alignItems:
+        "center",
 
-    backgroundColor: "rgba(255,255,255,0.10)",
-  },
+      backgroundColor:
+        "rgba(255,255,255,0.10)",
+    },
 
-  clusterText: {
-    fontSize: 14,
-    fontWeight: "800",
-  },
-});
+    clusterText: {
+      fontSize: 14,
+      fontWeight: "800",
+    },
+  });
