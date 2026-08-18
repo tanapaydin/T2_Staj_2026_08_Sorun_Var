@@ -1,65 +1,42 @@
 # Roadmap
 
-## Phase 1 - Infrastructure
+## Completed
 
-* Docker
-* PostgreSQL
-* FastAPI
-* Expo
-* GitHub
-* Supabase Storage
+- Docker, PostgreSQL, FastAPI, Expo, and GitHub project setup
+- User registration, login, JWT storage, and account deletion
+- Report creation, report listing, pagination, statistics, and category charts
+- Location-based city and district filtering
+- Map display, marker clustering, category filters, and location search
+- Report follow/unfollow and followed-report listing
+- Comments API
+- AI image analysis, category suggestion, and description generation
 
-## Phase 2 - Authentication
+## Planned
 
-* Register
-* Login
-* JWT
-* Email verification
-* Password reset
+### Report and media workflow
 
-## Phase 3 - Reports
+- Persistent multi-image upload for reports
+- Report image storage integration
+- Report update/delete workflow
+- Municipality department assignment and progress/status history UI
 
-* Camera capture
-* Multiple images
-* AI category suggestion
-* AI description generation
-* Report submission
+### Authentication and notifications
 
-## Phase 4 - Map
+- Email verification
+- Password reset
+- Refresh-token flow
+- Completion and follow notifications
 
-* Public issue map
-* Category icons
-* Progress rings
-* Detail panel
-* Animations
+### AI and moderation
 
-## Phase 5 - Municipality Workflow
+- Image/text moderation policy workflow
+- Duplicate report detection
+- Priority prediction
+- Fake-report detection
 
-* Department assignment
-* Progress updates
-* Status history
-* Completion notifications
+### Production
 
-## Phase 6 - Community Features
-
-* Comments
-* Upvotes
-* View counts
-* Saved reports
-* Notifications
-
-## Phase 7 - AI
-
-* Image moderation
-* Text moderation
-* Duplicate detection
-* Priority prediction
-* Fake report detection
-
-## Phase 8 - Production
-
-* EAS Build
-* HTTPS
-* CI/CD
-* Monitoring
-* Deployment
+- EAS build
+- HTTPS
+- CI/CD
+- Monitoring and deployment
