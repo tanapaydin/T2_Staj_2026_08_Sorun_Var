@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,19 +11,26 @@ import {
   View,
   Modal,
 } from "react-native";
+
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
-import MapView, { Circle, Marker, MapPressEvent } from "react-native-maps";
+import MapView, {
+  Circle,
+  Marker,
+  MapPressEvent,
+} from "react-native-maps";
+
 import {
   createReport,
   fetchReports,
   analyzeReportPhotos,
 } from "../../lib/api";
+
 import type { Report } from "../../types/report";
+import { getAuthData } from "../../lib/auth";
 
 type UserLocation = {
   latitude: number;
@@ -556,13 +562,19 @@ const fillWithAI = async () => {
     try {
       setSending(true);
 
+      const auth = await getAuthData();
+
+      if (!auth?.access_token) {
+        throw new Error("Rapor göndermek için giriş yapmalısın.");
+      }
+
       await createReport({
-        photos,
-        categories: categoriesSelected,
+        title: description.trim().slice(0, 100),
+        category: categoriesSelected[0],
         description: description.trim(),
         latitude: location.latitude,
         longitude: location.longitude,
-      });
+      }, auth.access_token);
 
       setSending(false);
 
@@ -1719,6 +1731,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     marginTop: 20,
+  },
+
+  aiButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
 
   aiText: {

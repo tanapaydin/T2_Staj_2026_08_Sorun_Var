@@ -11,6 +11,8 @@ export type ReportFilters = {
   priority?: "high" | "medium" | "low";
   date?: "today" | "7d" | "30d";
   sort?: "newest" | "oldest" | "most_viewed";
+  city?: string;
+  district?: string;
 
   // Pagination
   skip?: number;
@@ -30,6 +32,7 @@ export type LocationSuggestion = {
   latitude: number;
   longitude: number;
 };
+
 
 export type ReportStatistics = {
   total_reports: number;
@@ -137,6 +140,14 @@ export async function fetchReports(
       "sort",
       filters.sort
     );
+  }
+
+  if (filters?.city) {
+    params.append("city", filters.city);
+  }
+
+  if (filters?.district) {
+    params.append("district", filters.district);
   }
 
   // Pagination
@@ -272,6 +283,39 @@ export async function createReport(
   );
 
   return data;
+}
+
+export type AiReportAnalysis = {
+  description?: string;
+  category?: string;
+};
+
+export async function analyzeReportPhotos(
+  photos: string[],
+  selectedCategories: string[]
+): Promise<AiReportAnalysis> {
+  if (photos.length === 0) {
+    throw new Error("Analiz için en az bir fotoğraf gerekli.");
+  }
+
+  const formData = new FormData();
+  formData.append("image", {
+    uri: photos[0],
+    name: "report-photo.jpg",
+    type: "image/jpeg",
+  } as any);
+  formData.append("selected_categories", selectedCategories.join(","));
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/ai/analyze-image`,
+    { method: "POST", body: formData }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import Svg, {
 } from "react-native-svg";
 
 import { CategoryStatistics } from "../../lib/api";
+import { Colors, Radius, Shadows, Spacing, Typography } from "../../theme";
 
 const categoryLabels: Record<string, string> = {
   road: "Yol",
@@ -21,16 +22,7 @@ const categoryLabels: Record<string, string> = {
 };
 
 const categoryColors: Record<string, string> = {
-  road: "#FCA5A5",
-  trash: "#86EFAC",
-  lighting: "#FCD34D",
-  construction: "#CBD5E1",
-  water: "#93C5FD",
-  park: "#A7F3D0",
-  traffic: "#C4B5FD",
-  noise: "#F9A8D4",
-  animal: "#D6B48A",
-  other: "#94A3B8",
+  ...Colors.category,
 };
 
 function polarToCartesian(
@@ -148,7 +140,7 @@ export default function CategoryChart({
                   const color =
                     categoryColors[
                       category.category
-                    ] ?? "#94A3B8";
+                    ] ?? Colors.category.other;
 
                   if (angle >= 359.9) {
                     return (
@@ -188,7 +180,7 @@ export default function CategoryChart({
                     radius -
                     strokeWidth / 2
                   }
-                  fill="white"
+                  fill={Colors.surface}
                 />
               </G>
             </Svg>
@@ -224,7 +216,7 @@ export default function CategoryChart({
                     backgroundColor:
                       categoryColors[
                         category.category
-                      ] ?? "#94A3B8",
+                      ] ?? Colors.category.other,
                   },
                 ]}
               />
@@ -253,10 +245,10 @@ export default function CategoryChart({
 
 const styles = StyleSheet.create({
   categoryCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 18,
-    elevation: 2,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg + 2,
+    ...Shadows.sm,
   },
 
   chartWrapper: {
@@ -272,14 +264,13 @@ const styles = StyleSheet.create({
   },
 
   chartTotal: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#0F172A",
+    ...Typography.titleLarge,
+    color: Colors.text,
   },
 
   chartCenterLabel: {
-    color: "#64748B",
-    fontSize: 12,
+    ...Typography.meta,
+    color: Colors.textMuted,
     marginTop: -2,
   },
 
@@ -290,7 +281,7 @@ const styles = StyleSheet.create({
   },
 
   chartEmptyText: {
-    color: "#94A3B8",
+    color: Colors.category.other,
     fontWeight: "600",
   },
 
@@ -307,20 +298,19 @@ const styles = StyleSheet.create({
   legendDot: {
     width: 9,
     height: 9,
-    borderRadius: 5,
+    borderRadius: Radius.xs,
     marginRight: 9,
   },
 
   legendLabel: {
     flex: 1,
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "600",
+    ...Typography.label,
+    color: Colors.textSecondary,
   },
 
   legendCount: {
-    color: "#0F172A",
-    fontSize: 13,
+    ...Typography.label,
     fontWeight: "800",
+    color: Colors.text,
   },
 });

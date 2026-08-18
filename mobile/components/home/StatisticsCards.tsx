@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 
-import { Colors } from "../../theme/colors";
+import { Colors, HomeTokens, Radius, Shadows, Spacing, Typography } from "../../theme";
 
 type StatisticsCardProps = {
   totalReports: number;
@@ -73,15 +73,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 28,
+    marginBottom: HomeTokens.sectionMarginBottom,
   },
 
   statCard: {
     width: "48%",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    elevation: 1,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg + 2,
+    marginBottom: HomeTokens.sectionHeaderMarginBottom,
+    ...Shadows.sm,
     overflow: "hidden",
   },
 
@@ -110,15 +110,13 @@ const styles = StyleSheet.create({
   },
 
   statLabel: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "600",
+    ...Typography.label,
+    color: Colors.textMuted,
   },
 
   statValue: {
-    marginTop: 8,
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#0F172A",
+    marginTop: Spacing.sm,
+    ...Typography.titleLarge,
+    color: Colors.text,
   },
 });
