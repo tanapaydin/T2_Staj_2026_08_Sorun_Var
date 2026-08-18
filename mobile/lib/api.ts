@@ -285,6 +285,39 @@ export async function createReport(
   return data;
 }
 
+export type AiReportAnalysis = {
+  description?: string;
+  category?: string;
+};
+
+export async function analyzeReportPhotos(
+  photos: string[],
+  selectedCategories: string[]
+): Promise<AiReportAnalysis> {
+  if (photos.length === 0) {
+    throw new Error("Analiz için en az bir fotoğraf gerekli.");
+  }
+
+  const formData = new FormData();
+  formData.append("image", {
+    uri: photos[0],
+    name: "report-photo.jpg",
+    type: "image/jpeg",
+  } as any);
+  formData.append("selected_categories", selectedCategories.join(","));
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/ai/analyze-image`,
+    { method: "POST", body: formData }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
 // ---------------------------------------------------------------------------
 // LOCATION SEARCH
 // ---------------------------------------------------------------------------
