@@ -9,6 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AuthBackground from "../../components/auth/AuthBackground";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { register } from "../../lib/auth";
@@ -66,7 +67,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <AuthBackground>
       <View style={styles.form}>
         <Text style={styles.title}>Kayıt Ol</Text>
         <Text style={styles.subtitle}>Hesap oluşturarak raporlarınızı takip edin.</Text>
@@ -121,7 +122,7 @@ export default function RegisterScreen() {
           <Text style={styles.guestText}>Misafir olarak devam et</Text>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </AuthBackground>
   );
 }
 

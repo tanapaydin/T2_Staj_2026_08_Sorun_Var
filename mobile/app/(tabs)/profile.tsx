@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [auth, setAuth] = useState<AuthResponse | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getAuthData()
@@ -25,6 +27,37 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     await clearAuthData();
     router.replace("/");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!auth) return;
+
+    Alert.alert(
+      "Hesabı Sil",
+      "Hesabınızı kalıcı olarak silmek istediğinize emin misiniz? Tüm raporlarınız ve yorumlarınız silinecektir.",
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Sil",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeleting(true);
+              // call API
+              const { deleteAccount } = await import("../../lib/api");
+              await deleteAccount(auth.access_token);
+              await clearAuthData();
+              router.replace("/");
+            } catch (err) {
+              console.log("DELETE ACCOUNT ERROR", err);
+              Alert.alert("Hata", String(err));
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (checkingAuth) {
@@ -89,8 +122,16 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        <Pressable style={styles.logoutButton} onPress={handleLogout}>
+        <Pressable style={styles.logoutButton} onPress={handleLogout} disabled={deleting}>
           <Text style={styles.logoutButtonText}>Çıkış Yap</Text>
+        </Pressable>
+
+        <Pressable style={styles.deleteButton} onPress={handleDeleteAccount} disabled={deleting}>
+          {deleting ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.deleteButtonText}>Hesabı Sil</Text>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -204,6 +245,18 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   logoutButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  deleteButton: {
+    alignItems: "center",
+    backgroundColor: "#7F1D1D",
+    borderRadius: 12,
+    marginTop: 12,
+    paddingVertical: 14,
+  },
+  deleteButtonText: {
     color: "white",
     fontSize: 16,
     fontWeight: "800",

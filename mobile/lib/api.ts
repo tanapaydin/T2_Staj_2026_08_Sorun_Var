@@ -591,3 +591,28 @@ export async function fetchTopStatistics(
 
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// DELETE ACCOUNT
+// ---------------------------------------------------------------------------
+
+export async function deleteAccount(accessToken: string): Promise<void> {
+  const url = `${API_CONFIG.BASE_URL}/users/me`;
+
+  console.log("DELETE ACCOUNT:", url);
+
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const message = await parseError(response);
+    console.log("DELETE ACCOUNT ERROR:", response.status, message);
+    throw new Error(message);
+  }
+
+  console.log("DELETE ACCOUNT SUCCESS");
+}

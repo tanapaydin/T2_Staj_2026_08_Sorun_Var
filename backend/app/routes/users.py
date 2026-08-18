@@ -1,10 +1,10 @@
-﻿from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends, Response, status, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.models import User, Report, Comment, ReportFollow, ReportStatusHistory
 from app.schemas import UserResponse
-from app.models import User, Report, ReportFollow
 
 router = APIRouter(
     prefix="/users",
@@ -15,6 +15,7 @@ router = APIRouter(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
 
 # ============================================================
 # MY FOLLOWED REPORTS
@@ -66,3 +67,35 @@ def my_followed_reports(
         }
         for follow, report in follows
     ]
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Remove reports created by the user (Report cascade will remove images, comments, history)
+    try:
+        db.query(Report).filter(Report.user_id == current_user.id).delete(synchronize_session=False)
+
+        # Remove comments authored by the user on other reports
+        db.query(Comment).filter(Comment.user_id == current_user.id).delete(synchronize_session=False)
+
+        # Remove status history items changed by this user
+        db.query(ReportStatusHistory).filter(ReportStatusHistory.changed_by == current_user.id).delete(synchronize_session=False)
+
+        # Finally remove the user record (load with this session to avoid cross-session issues)
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if user:
+            db.delete(user)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Kullanıcı silinirken hata oluştu.",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
