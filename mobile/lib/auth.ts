@@ -19,6 +19,7 @@ export type AuthResponse = {
 
 const baseUrl = API_CONFIG.BASE_URL;
 const STORAGE_KEY = "SORUN_VAR_AUTH";
+const REQUEST_TIMEOUT_MS = 10000;
 
 async function parseError(response: Response) {
   try {
@@ -53,6 +54,8 @@ export async function login(
   console.log("LOGIN EMAIL:", email);
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -62,7 +65,9 @@ export async function login(
         email,
         password,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     console.log("LOGIN STATUS:", response.status);
 
@@ -99,6 +104,10 @@ export async function login(
   } catch (error) {
     console.log("========== LOGIN ERROR ==========");
     console.log(error);
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Sunucuya bağlanılamadı. Lütfen backend bağlantısını kontrol edin.");
+    }
 
     throw error;
   }
