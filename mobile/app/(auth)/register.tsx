@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#1D4ED8",
     borderColor: "#000000",
-    borderWidth: 1,
+    borderWidth: 2,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "white",
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 16,
   },
   passwordContainer: {
