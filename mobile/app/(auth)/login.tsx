@@ -62,7 +62,7 @@ export default function LoginScreen() {
         <TextInput
           style={styles.input}
           placeholder="E-posta"
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor="#334155"
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
@@ -72,7 +72,7 @@ export default function LoginScreen() {
           <TextInput
             style={[styles.input, styles.passwordInput]}
             placeholder="Şifre"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#334155"
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
@@ -128,15 +128,16 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: "#475569",
+    color: "#172033",
+    fontWeight: "600",
     marginBottom: 28,
     textAlign: "center",
   },
   input: {
     width: "100%",
-    backgroundColor: "white",
-    borderColor: "#CBD5E1",
-    borderWidth: 1,
+    backgroundColor: "#DBEAFE",
+    borderColor: "#93C5FD",
+    borderWidth: 2,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -146,6 +147,8 @@ const styles = StyleSheet.create({
   button: {
     width: "100%",
     backgroundColor: "#1D4ED8",
+    borderColor: "#000000",
+    borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
@@ -180,7 +183,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   guestText: {
-    color: "#475569",
+    color: "#000000",
+    fontWeight: "800",
     textAlign: "center",
   },
 });
