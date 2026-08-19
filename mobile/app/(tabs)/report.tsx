@@ -3,10 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-<<<<<<< Updated upstream
-=======
+
+
   Platform,
->>>>>>> Stashed changes
+
   ScrollView,
   StyleSheet,
   Text,
@@ -21,16 +21,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
-<<<<<<< Updated upstream
-import MapView, {
-  Circle,
-  Marker,
-  MapPressEvent,
-} from "react-native-maps";
 
-=======
 import type { MapPressEvent } from "react-native-maps";
->>>>>>> Stashed changes
+// import MapView from "react-native-maps";
+
 import {
   createReport,
   fetchReports,
@@ -38,7 +32,7 @@ import {
 } from "../../lib/api";
 
 import type { Report } from "../../types/report";
-import { getAuthData } from "../../lib/auth";
+import { AuthResponse, getAuthData } from "../../lib/auth";
 
 const isWeb = Platform.OS === "web";
 
@@ -112,6 +106,9 @@ function calculateDistance(
 export default function ReportScreen() {
   const [permission, requestPermission] =
     useCameraPermissions();
+  const router = useRouter();
+  const [auth, setAuth] = useState<AuthResponse | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const cameraRef = useRef<CameraView>(null);
 
@@ -151,7 +148,14 @@ export default function ReportScreen() {
    * kullanıcının gerçek konumunu otomatik al.
    */
   useEffect(() => {
-    getCurrentLocation();
+    getAuthData()
+      .then((data) => {
+        setAuth(data);
+        if (data) {
+          getCurrentLocation();
+        }
+      })
+      .finally(() => setCheckingAuth(false));
   }, []);
 
   const getCurrentLocation = async () => {
@@ -632,6 +636,42 @@ const fillWithAI = async () => {
       Alert.alert("Hata", message);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <SafeAreaView style={styles.guestContainer}>
+        <ActivityIndicator color="#315EE8" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!auth) {
+    return (
+      <SafeAreaView style={styles.guestContainer}>
+        <View style={styles.guestPanel}>
+          <Text style={styles.guestTitle}>Bildirmek için giriş yapın</Text>
+          <Text style={styles.guestSubtitle}>
+            Misafir olarak sorunları görüntüleyebilirsiniz. Yeni bir sorun
+            bildirmek için hesabınıza giriş yapmanız gerekir.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.guestPrimaryButton}
+            onPress={() => router.push("/(auth)/login")}
+          >
+            <Text style={styles.guestPrimaryButtonText}>Giriş Yap</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.guestSecondaryButton}
+            onPress={() => router.push("/(auth)/register")}
+          >
+            <Text style={styles.guestSecondaryButtonText}>Kayıt Ol</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   /*
    * KAMERA
@@ -1338,6 +1378,65 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F7F8FA",
+  },
+
+  guestContainer: {
+    flex: 1,
+    backgroundColor: "#F7F8FA",
+    justifyContent: "center",
+    padding: 24,
+  },
+
+  guestPanel: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8EBF0",
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+  },
+
+  guestTitle: {
+    color: "#172033",
+    fontSize: 24,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  guestSubtitle: {
+    color: "#687386",
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 10,
+    textAlign: "center",
+  },
+
+  guestPrimaryButton: {
+    alignItems: "center",
+    backgroundColor: "#315EE8",
+    borderRadius: 12,
+    marginTop: 24,
+    paddingVertical: 14,
+  },
+
+  guestPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  guestSecondaryButton: {
+    alignItems: "center",
+    borderColor: "#315EE8",
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 12,
+    paddingVertical: 14,
+  },
+
+  guestSecondaryButtonText: {
+    color: "#315EE8",
+    fontSize: 16,
+    fontWeight: "800",
   },
 
   home: {

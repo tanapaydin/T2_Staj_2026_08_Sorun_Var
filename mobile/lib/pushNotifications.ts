@@ -9,6 +9,32 @@ import {
 
 const PUSH_TOKEN_KEY = "SORUN_VAR_PUSH_TOKEN";
 
+export async function ensurePushPermission(): Promise<void> {
+  if (Platform.OS === "web") {
+    throw new Error("Push bildirimleri web ortamında kullanılamaz.");
+  }
+
+  const permissions = await Notifications.getPermissionsAsync();
+  let permissionStatus = permissions.status;
+
+  if (permissionStatus !== "granted" && permissions.canAskAgain === false) {
+    throw new Error("Bildirim izinlerinizi açmanız gerekiyor.");
+  }
+
+  if (permissionStatus !== "granted") {
+    const requested = await Notifications.requestPermissionsAsync();
+    permissionStatus = requested.status;
+
+    if (permissionStatus !== "granted" && requested.canAskAgain === false) {
+      throw new Error("Bildirim izinlerinizi açmanız gerekiyor.");
+    }
+  }
+
+  if (permissionStatus !== "granted") {
+    throw new Error("Bildirim izni verilmedi.");
+  }
+}
+
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -20,11 +46,11 @@ if (Platform.OS !== "web") {
   });
 }
 
-export async function syncNearbyPushSubscription(
+export async function syncPushSubscription(
   accessToken: string,
   enabled: boolean,
-  latitude: number,
-  longitude: number
+  latitude?: number,
+  longitude?: number
 ): Promise<void> {
   if (Platform.OS === "web") return;
 
@@ -38,17 +64,7 @@ export async function syncNearbyPushSubscription(
     return;
   }
 
-  const permissions = await Notifications.getPermissionsAsync();
-  let permissionStatus = permissions.status;
-
-  if (permissionStatus !== "granted") {
-    const requested = await Notifications.requestPermissionsAsync();
-    permissionStatus = requested.status;
-  }
-
-  if (permissionStatus !== "granted") {
-    throw new Error("Bildirim izni verilmedi.");
-  }
+  await ensurePushPermission();
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("nearby-reports", {

@@ -3,26 +3,34 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 
 import { AuthResponse, clearAuthData, getAuthData } from "../../lib/auth";
 import {
   fetchFollowedReports,
   fetchNotificationSettings,
+  updateProfile,
   updateNotificationSettings,
 } from "../../lib/api";
 import { Report } from "../../types/report";
 import { statusLabels } from "../../constants/report";
-import { syncNearbyPushSubscription } from "../../lib/pushNotifications";
+import {
+  ensurePushPermission,
+  syncPushSubscription,
+} from "../../lib/pushNotifications";
 
 const roleLabels: Record<string, string> = {
   citizen: "Vatandaş",
@@ -43,9 +51,12 @@ export default function ProfileScreen() {
   const [deleting, setDeleting] = useState(false);
   const [followedReports, setFollowedReports] = useState<Report[]>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(true);
+  const [showAllFollowed, setShowAllFollowed] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
+  const [draftAvatarUrl, setDraftAvatarUrl] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [settings, setSettings] = useState<ProfileSettings>({
     push_notifications: true,
     location_notifications: false,
@@ -88,10 +99,23 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await clearAuthData();
-    setAuth(null);
-    setFollowedReports([]);
-    router.replace("/");
+    Alert.alert(
+      "Çıkış Yap",
+      "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Çıkış Yap",
+          style: "destructive",
+          onPress: async () => {
+            await clearAuthData();
+            setAuth(null);
+            setFollowedReports([]);
+            router.replace("/");
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteAccount = async () => {
@@ -133,34 +157,80 @@ export default function ProfileScreen() {
 
     try {
       const nextSettings = { ...settings, [key]: nextValue };
-      if (key === "push_notifications" || key === "location_notifications") {
-        if (nextSettings.push_notifications || nextSettings.location_notifications) {
-          const permission = await Location.requestForegroundPermissionsAsync();
-          if (permission.status !== "granted") {
-            throw new Error("Konum izni verilmedi.");
-          }
+      let latitude: number | undefined;
+      let longitude: number | undefined;
 
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          await syncNearbyPushSubscription(
-            auth.access_token,
-            true,
-            location.coords.latitude,
-            location.coords.longitude
+      if (key === "push_notifications" && nextValue) {
+        await ensurePushPermission();
+      }
+
+      if (key === "location_notifications" && nextValue) {
+        const locationPermission =
+          await Location.requestForegroundPermissionsAsync();
+        if (locationPermission.status !== "granted") {
+          throw new Error(
+            locationPermission.canAskAgain === false
+              ? "Konum izinlerinizi açmanız gerekiyor."
+              : "Konum izni verilmedi."
           );
-        } else {
-          await syncNearbyPushSubscription(auth.access_token, false, 0, 0);
         }
+
+        await ensurePushPermission();
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        latitude = location.coords.latitude;
+        longitude = location.coords.longitude;
       }
 
       const savedSettings = await updateNotificationSettings(auth.access_token, {
         [key]: nextValue,
       });
       setSettings((current) => ({ ...current, ...savedSettings }));
+
+      if (key === "push_notifications" || key === "location_notifications") {
+        try {
+          if (nextSettings.push_notifications || nextSettings.location_notifications) {
+            await syncPushSubscription(
+              auth.access_token,
+              true,
+              latitude,
+              longitude
+            );
+          } else {
+            await syncPushSubscription(auth.access_token, false);
+          }
+        } catch (notificationError) {
+          Alert.alert(
+            "Ayar kaydedildi",
+            notificationError instanceof Error
+              ? notificationError.message
+              : "Cihaz bildirimleri henüz etkinleştirilemedi."
+          );
+          console.log("PUSH SUBSCRIPTION ERROR:", notificationError);
+        }
+      }
     } catch (error) {
       setSettings((current) => ({ ...current, [key]: !nextValue }));
-      Alert.alert("Bildirim ayarları", "Ayar kaydedilemedi. Lütfen tekrar deneyin.");
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Ayar kaydedilemedi. Lütfen tekrar deneyin.";
+      const needsSettings =
+        message.includes("izinlerinizi açmanız gerekiyor") ||
+        message.includes("web ortamında");
+
+      Alert.alert(
+        needsSettings ? "İzin gerekli" : "Bildirim ayarları",
+        message,
+        needsSettings
+          ? [
+              { text: "İptal", style: "cancel" },
+              { text: "Ayarlar", onPress: () => Linking.openSettings() },
+            ]
+          : undefined
+      );
       console.log("SAVE PROFILE SETTINGS ERROR:", error);
     }
   };
@@ -171,7 +241,37 @@ export default function ProfileScreen() {
     if (!auth) return;
     setDraftName(auth.user.name);
     setDraftEmail(auth.user.email);
+    setDraftAvatarUrl(auth.user.avatar_url ?? null);
     setIsEditingProfile(true);
+  };
+
+  const chooseProfilePhoto = async (source: "camera" | "gallery") => {
+    const result = source === "camera"
+      ? await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.7,
+          base64: true,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.7,
+          base64: true,
+        });
+
+    if (!result.canceled && result.assets[0]?.base64) {
+      setDraftAvatarUrl(`data:image/jpeg;base64,${result.assets[0].base64}`);
+    }
+  };
+
+  const openPhotoOptions = () => {
+    Alert.alert("Profil fotoğrafı", "Fotoğraf seçin", [
+      { text: "İptal", style: "cancel" },
+      { text: "Galeriden seç", onPress: () => chooseProfilePhoto("gallery") },
+      { text: "Kamera ile çek", onPress: () => chooseProfilePhoto("camera") },
+    ]);
   };
 
   const handleSaveProfile = async () => {
@@ -190,18 +290,25 @@ export default function ProfileScreen() {
       return;
     }
 
-    const updatedAuth = {
-      ...auth,
-      user: {
-        ...auth.user,
+    try {
+      setSavingProfile(true);
+      const updatedUser = await updateProfile(auth.access_token, {
         name: nextName,
         email: nextEmail,
-      },
-    };
-
-    await AsyncStorage.setItem("SORUN_VAR_AUTH", JSON.stringify(updatedAuth));
-    setAuth(updatedAuth);
-    setIsEditingProfile(false);
+        avatar_url: draftAvatarUrl,
+      });
+      const updatedAuth = { ...auth, user: updatedUser };
+      await AsyncStorage.setItem("SORUN_VAR_AUTH", JSON.stringify(updatedAuth));
+      setAuth(updatedAuth);
+      setIsEditingProfile(false);
+    } catch (error) {
+      Alert.alert(
+        "Profil güncellenemedi",
+        error instanceof Error ? error.message : "Lütfen tekrar deneyin."
+      );
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   if (checkingAuth) {
@@ -214,8 +321,8 @@ export default function ProfileScreen() {
 
   if (!auth) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.panel}>
+      <SafeAreaView style={styles.centered}>
+        <View style={styles.guestPanel}>
           <Text style={styles.title}>Profil için giriş yapın</Text>
           <Text style={styles.subtitle}>
             Misafir olarak gezmeye devam edebilirsiniz. Profil bilgileri ve
@@ -247,11 +354,13 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.panel}>
-          <Text style={styles.title}>Profil</Text>
-
           <View style={styles.profileHeader}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
+              {auth.user.avatar_url ? (
+                <Image source={{ uri: auth.user.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{initials}</Text>
+              )}
             </View>
 
             <Text style={styles.name}>{auth.user.name}</Text>
@@ -267,6 +376,26 @@ export default function ProfileScreen() {
           {isEditingProfile && (
             <View style={styles.editCard}>
               <Text style={styles.sectionTitle}>Profili Güncelle</Text>
+
+              <View style={styles.photoEditRow}>
+                <View style={styles.editAvatar}>
+                  {draftAvatarUrl ? (
+                    <Image source={{ uri: draftAvatarUrl }} style={styles.editAvatarImage} />
+                  ) : (
+                    <Text style={styles.editAvatarText}>{initials}</Text>
+                  )}
+                </View>
+                <View style={styles.photoActions}>
+                  <Pressable style={styles.photoButton} onPress={openPhotoOptions}>
+                    <Text style={styles.photoButtonText}>Fotoğrafı değiştir</Text>
+                  </Pressable>
+                  {draftAvatarUrl && (
+                    <Pressable onPress={() => setDraftAvatarUrl(null)}>
+                      <Text style={styles.removePhotoText}>Fotoğrafı kaldır</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
 
               <Text style={styles.inputLabel}>Ad Soyad</Text>
               <TextInput
@@ -296,8 +425,8 @@ export default function ProfileScreen() {
                   <Text style={styles.secondaryActionText}>İptal</Text>
                 </Pressable>
 
-                <Pressable style={styles.primaryAction} onPress={handleSaveProfile}>
-                  <Text style={styles.primaryActionText}>Kaydet</Text>
+                <Pressable style={styles.primaryAction} onPress={handleSaveProfile} disabled={savingProfile}>
+                  {savingProfile ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kaydet</Text>}
                 </Pressable>
               </View>
             </View>
@@ -318,7 +447,14 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Takip edilen problemler</Text>
+            <Pressable
+              style={styles.followedHeader}
+              onPress={() => followedReports.length > 0 && setShowAllFollowed(true)}
+              disabled={followedReports.length === 0}
+            >
+              <Text style={styles.sectionTitle}>Takip edilen problemler</Text>
+              <Text style={styles.followedCount}>{followedReports.length}</Text>
+            </Pressable>
 
             {loadingFollowed ? (
               <View style={styles.loadingBox}>
@@ -332,7 +468,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             ) : (
-              followedReports.slice(0, 4).map((report) => (
+              followedReports.slice(0, 3).map((report) => (
                 <Pressable
                   key={report.id}
                   style={styles.reportCard}
@@ -354,6 +490,54 @@ export default function ProfileScreen() {
               ))
             )}
           </View>
+
+          <Modal
+            visible={showAllFollowed}
+            animationType="slide"
+            onRequestClose={() => setShowAllFollowed(false)}
+          >
+            <SafeAreaView style={styles.followedModal}>
+              <View style={styles.followedModalHeader}>
+                <Text style={styles.followedModalTitle}>
+                  Takip edilen problemler ({followedReports.length})
+                </Text>
+                <Pressable
+                  style={styles.followedCloseButton}
+                  onPress={() => setShowAllFollowed(false)}
+                >
+                  <Text style={styles.followedCloseText}>Kapat</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView
+                contentContainerStyle={styles.followedModalList}
+                showsVerticalScrollIndicator={false}
+              >
+                {followedReports.map((report) => (
+                  <Pressable
+                    key={report.id}
+                    style={styles.reportCard}
+                    onPress={() => {
+                      setShowAllFollowed(false);
+                      router.push({ pathname: "/(tabs)/home" });
+                    }}
+                  >
+                    <View style={styles.reportHeader}>
+                      <Text style={styles.reportTitle} numberOfLines={1}>
+                        {report.title}
+                      </Text>
+                      <Text style={styles.reportStatus}>
+                        {statusLabels[report.status] || report.status}
+                      </Text>
+                    </View>
+                    <Text style={styles.reportMeta}>
+                      {report.city || "Konum bilinmiyor"} • {report.follower_count || 0} takip
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </SafeAreaView>
+          </Modal>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ayarlar</Text>
@@ -440,22 +624,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F8FAFC",
+    padding: 24,
   },
   panel: {
     flex: 1,
     padding: 24,
+  },
+  guestPanel: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8EBF0",
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    alignSelf: "stretch",
   },
   title: {
     color: "#0F172A",
     fontSize: 28,
     fontWeight: "800",
     marginBottom: 8,
+    textAlign: "center",
   },
   subtitle: {
     color: "#475569",
     fontSize: 16,
     lineHeight: 24,
     marginBottom: 24,
+    textAlign: "center",
   },
   profileHeader: {
     alignItems: "center",
@@ -545,6 +740,56 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "800",
   },
+  avatarImage: {
+    borderRadius: 36,
+    height: 72,
+    width: 72,
+  },
+  photoEditRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  editAvatar: {
+    alignItems: "center",
+    backgroundColor: "#DBEAFE",
+    borderRadius: 32,
+    height: 64,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: 64,
+  },
+  editAvatarImage: {
+    height: 64,
+    width: 64,
+  },
+  editAvatarText: {
+    color: "#1D4ED8",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  photoActions: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  photoButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#E0F2FE",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  photoButtonText: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  removePhotoText: {
+    color: "#DC2626",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 8,
+  },
   name: {
     color: "#0F172A",
     fontSize: 22,
@@ -589,6 +834,55 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 12,
+  },
+  followedHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  followedCount: {
+    backgroundColor: "#DBEAFE",
+    borderRadius: 999,
+    color: "#1D4ED8",
+    fontSize: 14,
+    fontWeight: "800",
+    minWidth: 30,
+    overflow: "hidden",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    textAlign: "center",
+  },
+  followedModal: {
+    backgroundColor: "#F8FAFC",
+    flex: 1,
+    padding: 24,
+  },
+  followedModalHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  followedModalTitle: {
+    color: "#0F172A",
+    flex: 1,
+    fontSize: 22,
+    fontWeight: "800",
+    marginRight: 12,
+  },
+  followedCloseButton: {
+    backgroundColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  followedCloseText: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  followedModalList: {
+    paddingBottom: 24,
   },
   settingGroupTitle: {
     color: "#2563EB",

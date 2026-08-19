@@ -39,6 +39,12 @@ export type NotificationSettings = {
   email_notifications: boolean;
 };
 
+export type ProfileUpdate = {
+  name?: string;
+  email?: string;
+  avatar_url?: string | null;
+};
+
 
 export type ReportStatistics = {
   total_reports: number;
@@ -110,6 +116,26 @@ export async function fetchNotificationSettings(
   return response.json();
 }
 
+export async function updateProfile(
+  accessToken: string,
+  profile: ProfileUpdate
+) {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(profile),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
 export async function updateNotificationSettings(
   accessToken: string,
   settings: Partial<NotificationSettings>
@@ -133,8 +159,8 @@ export async function updateNotificationSettings(
 export async function registerPushToken(
   accessToken: string,
   token: string,
-  latitude: number,
-  longitude: number
+  latitude?: number,
+  longitude?: number
 ): Promise<void> {
   const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/push-token`, {
     method: "POST",
@@ -142,7 +168,11 @@ export async function registerPushToken(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ token, latitude, longitude }),
+    body: JSON.stringify({
+      token,
+      ...(latitude !== undefined ? { latitude } : {}),
+      ...(longitude !== undefined ? { longitude } : {}),
+    }),
   });
 
   if (!response.ok) {

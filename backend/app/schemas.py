@@ -24,6 +24,12 @@ class UserLogin(BaseModel):
     password: str
 
 
+class ProfileUpdate(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+    avatar_url: str | None = None
+
+
 class UserResponse(BaseModel):
     id: UUID
     name: str
@@ -66,8 +72,8 @@ class NotificationSettingsUpdate(BaseModel):
 
 class PushTokenRegister(BaseModel):
     token: str
-    latitude: float
-    longitude: float
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 # ---------- REPORT ----------

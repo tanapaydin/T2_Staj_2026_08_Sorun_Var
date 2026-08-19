@@ -14,6 +14,7 @@ from app.models import (
 from app.schemas import (
     NotificationSettingsResponse,
     NotificationSettingsUpdate,
+    ProfileUpdate,
     PushTokenRegister,
     UserResponse,
 )
@@ -26,6 +27,41 @@ router = APIRouter(
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_profile(
+    profile: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    changes = (
+        profile.model_dump(exclude_unset=True)
+        if hasattr(profile, "model_dump")
+        else profile.dict(exclude_unset=True)
+    )
+
+    if "name" in changes and not changes["name"].strip():
+        raise HTTPException(status_code=400, detail="Ad alanı boş olamaz.")
+
+    if "email" in changes:
+        normalized_email = changes["email"].lower()
+        existing_user = (
+            db.query(User)
+            .filter(User.email == normalized_email, User.id != current_user.id)
+            .first()
+        )
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı.")
+        changes["email"] = normalized_email
+
+    for key, value in changes.items():
+        setattr(current_user, key, value.strip() if isinstance(value, str) and key == "name" else value)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 
@@ -71,8 +107,10 @@ def register_push_token(
         subscription = PushSubscription(token=registration.token)
 
     subscription.user_id = current_user.id
-    subscription.latitude = registration.latitude
-    subscription.longitude = registration.longitude
+    if registration.latitude is not None:
+        subscription.latitude = registration.latitude
+    if registration.longitude is not None:
+        subscription.longitude = registration.longitude
     db.add(subscription)
     db.commit()
 

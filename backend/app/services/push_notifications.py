@@ -36,6 +36,8 @@ def notify_nearby_users(db: Session, report: Report, creator: User) -> None:
         .join(User, User.id == PushSubscription.user_id)
         .filter(
             User.location_notifications.is_(True),
+            PushSubscription.latitude.is_not(None),
+            PushSubscription.longitude.is_not(None),
             PushSubscription.user_id != creator.id,
         )
         .all()
