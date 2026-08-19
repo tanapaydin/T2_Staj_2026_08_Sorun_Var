@@ -608,12 +608,12 @@ const fillWithAI = async () => {
       }
 
       await createReport({
-        title: description.trim().slice(0, 100),
-        category: categoriesSelected[0],
+        photos,
+        categories: categoriesSelected,
         description: description.trim(),
         latitude: location.latitude,
         longitude: location.longitude,
-      }, auth.access_token);
+      });
 
       setSending(false);
 
