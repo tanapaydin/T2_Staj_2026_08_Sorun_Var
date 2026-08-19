@@ -289,7 +289,21 @@ export default function ReportScreen() {
         });
 
       if (photo?.uri) {
-        setPreviewUri(photo.uri);
+        const photoUri = photo.uri;
+
+        setOldReportsOpen(false);
+        setLoadingOldReports(false);
+
+        setPreviewUri(null);
+        setCameraOpen(false);
+
+        setPhotos((current) => {
+          if (current.length >= MAX_PHOTOS) {
+            return current;
+          }
+
+          return [...current, photoUri];
+        });
       }
     } catch {
       Alert.alert(
