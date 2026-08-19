@@ -65,6 +65,9 @@ export default function LoginScreen() {
           placeholderTextColor="#334155"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoComplete="off"
+          importantForAutofill="no"
+          textContentType="oneTimeCode"
           value={email}
           onChangeText={setEmail}
         />
@@ -74,6 +77,9 @@ export default function LoginScreen() {
             placeholder="Şifre"
             placeholderTextColor="#334155"
             secureTextEntry={!showPassword}
+            autoComplete="off"
+            importantForAutofill="no"
+            textContentType="oneTimeCode"
             value={password}
             onChangeText={setPassword}
           />

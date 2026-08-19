@@ -136,7 +136,8 @@ export default function ProfileScreen() {
               await deleteAccount(auth.access_token);
               await clearAuthData();
               setAuth(null);
-              router.replace("/");
+              setFollowedReports([]);
+              router.replace("/(auth)/login");
             } catch (err) {
               console.log("DELETE ACCOUNT ERROR", err);
               Alert.alert("Hata", String(err));

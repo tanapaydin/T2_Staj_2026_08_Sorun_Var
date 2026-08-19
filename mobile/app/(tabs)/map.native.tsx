@@ -37,10 +37,13 @@ const isWeb = Platform.OS === "web";
 
 let MapView: any = View;
 let Marker: any = View;
+let Circle: any = View;
 
 if (!isWeb) {
   MapView = require("react-native-map-clustering").default;
-  Marker = require("react-native-maps").Marker;
+  const ReactNativeMaps = require("react-native-maps");
+  Marker = ReactNativeMaps.Marker;
+  Circle = ReactNativeMaps.Circle;
 }
 
 export default function MapScreen() {
@@ -364,21 +367,30 @@ export default function MapScreen() {
           />
 
           {userLocation && (
-            <Marker
-              coordinate={userLocation}
-              tracksViewChanges={false}
-            >
-              <View
-                style={{
-                  width: MapTokens.userMarkerSize,
-                  height: MapTokens.userMarkerSize,
-                  borderRadius: MapTokens.userMarkerSize / 2,
-                  backgroundColor: Colors.primary,
-                  borderWidth: MapTokens.userMarkerBorderWidth,
-                  borderColor: Colors.textInverse,
-                }}
+            <>
+              <Circle
+                center={userLocation}
+                radius={45}
+                strokeWidth={2}
+                strokeColor="rgba(37, 99, 235, 0.65)"
+                fillColor="rgba(37, 99, 235, 0.18)"
               />
-            </Marker>
+              <Marker
+                coordinate={userLocation}
+                tracksViewChanges={false}
+              >
+                <View
+                  style={{
+                    width: MapTokens.userMarkerSize,
+                    height: MapTokens.userMarkerSize,
+                    borderRadius: MapTokens.userMarkerSize / 2,
+                    backgroundColor: Colors.primary,
+                    borderWidth: MapTokens.userMarkerBorderWidth,
+                    borderColor: Colors.textInverse,
+                  }}
+                />
+              </Marker>
+            </>
           )}
         </MapView>
       )}
