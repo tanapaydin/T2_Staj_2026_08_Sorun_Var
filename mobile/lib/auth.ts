@@ -8,6 +8,9 @@ export type User = {
   avatar_url?: string | null;
   role: string;
   email_verified: boolean;
+  push_notifications: boolean;
+  location_notifications: boolean;
+  email_notifications: boolean;
   created_at: string;
 };
 

@@ -17,8 +17,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Report, User, ReportFollow
-from app.schemas import ReportCreate, ReportResponse
+from app.schemas import ReportCreate, ReportResponse, ReportUpdate
 from app.services.geocoding import get_location_details
+from app.services.push_notifications import notify_nearby_users
+from app.services.push_notifications import notify_report_followers
 
 
 router = APIRouter(
@@ -288,6 +290,7 @@ def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
+    notify_nearby_users(db, report, current_user)
 
     return report
 
@@ -769,6 +772,39 @@ def search_suggestions(
 # ============================================================
 # FOLLOW REPORT
 # ============================================================
+
+@router.patch("/{report_id}", response_model=ReportResponse)
+def update_report(
+    report_id: UUID,
+    report_update: ReportUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    if report.user_id != current_user.id and current_user.role not in {"admin", "municipality"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu raporu güncelleme yetkiniz yok.")
+
+    changes = report_update.model_dump(exclude_unset=True) if hasattr(report_update, "model_dump") else report_update.dict(exclude_unset=True)
+    if not changes:
+        return report
+
+    for key, value in changes.items():
+        setattr(report, key, value)
+
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    notify_report_followers(
+        db,
+        report,
+        "Takip ettiğiniz sorun güncellendi",
+        f"Durum: {report.status}, ilerleme: %{report.progress}",
+        current_user.id,
+    )
+    return report
 
 @router.post("/{report_id}/follow")
 def follow_report(

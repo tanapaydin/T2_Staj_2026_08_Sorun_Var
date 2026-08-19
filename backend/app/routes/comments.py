@@ -7,6 +7,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import Comment, Report, User
 from app.schemas import CommentCreate, CommentResponse
+from app.services.push_notifications import notify_comment_author
  
 router = APIRouter(
     prefix="/comments",
@@ -54,5 +55,6 @@ def create_comment(
     db.add(comment)
     db.commit()
     db.refresh(comment)
+    notify_comment_author(db, comment, report, current_user)
 
     return comment

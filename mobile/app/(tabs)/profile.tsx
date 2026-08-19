@@ -12,13 +12,17 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 
 import { AuthResponse, clearAuthData, getAuthData } from "../../lib/auth";
-import { fetchFollowedReports } from "../../lib/api";
+import {
+  fetchFollowedReports,
+  fetchNotificationSettings,
+  updateNotificationSettings,
+} from "../../lib/api";
 import { Report } from "../../types/report";
 import { statusLabels } from "../../constants/report";
-
-const PROFILE_SETTINGS_KEY = "SORUN_VAR_PROFILE_SETTINGS";
+import { syncNearbyPushSubscription } from "../../lib/pushNotifications";
 
 const roleLabels: Record<string, string> = {
   citizen: "Vatandaş",
@@ -27,10 +31,9 @@ const roleLabels: Record<string, string> = {
 };
 
 type ProfileSettings = {
-  notifications: boolean;
-  emailUpdates: boolean;
-  locationAlerts: boolean;
-  privateProfile: boolean;
+  push_notifications: boolean;
+  location_notifications: boolean;
+  email_notifications: boolean;
 };
 
 export default function ProfileScreen() {
@@ -44,20 +47,16 @@ export default function ProfileScreen() {
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
   const [settings, setSettings] = useState<ProfileSettings>({
-    notifications: true,
-    emailUpdates: true,
-    locationAlerts: false,
-    privateProfile: true,
+    push_notifications: true,
+    location_notifications: false,
+    email_notifications: false,
   });
 
   useEffect(() => {
-    const loadSettings = async () => {
+    const loadSettings = async (accessToken: string) => {
       try {
-        const rawSettings = await AsyncStorage.getItem(PROFILE_SETTINGS_KEY);
-        if (rawSettings) {
-          const savedSettings = JSON.parse(rawSettings) as Partial<ProfileSettings>;
-          setSettings((current) => ({ ...current, ...savedSettings }));
-        }
+        const savedSettings = await fetchNotificationSettings(accessToken);
+        setSettings(savedSettings);
       } catch (error) {
         console.log("LOAD PROFILE SETTINGS ERROR:", error);
       }
@@ -78,7 +77,7 @@ export default function ProfileScreen() {
               setFollowedReports([]);
             })
             .finally(() => setLoadingFollowed(false));
-          loadSettings();
+          loadSettings(data.access_token);
           return;
         }
 
@@ -126,19 +125,44 @@ export default function ProfileScreen() {
     );
   };
 
-  const toggleSetting = (key: keyof ProfileSettings) => {
-    setSettings((current) => {
-      const nextValue = {
-        ...current,
-        [key]: !current[key],
-      };
+  const toggleSetting = async (key: keyof ProfileSettings) => {
+    if (!auth) return;
 
-      AsyncStorage.setItem(PROFILE_SETTINGS_KEY, JSON.stringify(nextValue)).catch(
-        (error) => console.log("SAVE PROFILE SETTINGS ERROR:", error)
-      );
+    const nextValue = !settings[key];
+    setSettings((current) => ({ ...current, [key]: nextValue }));
 
-      return nextValue;
-    });
+    try {
+      const nextSettings = { ...settings, [key]: nextValue };
+      if (key === "push_notifications" || key === "location_notifications") {
+        if (nextSettings.push_notifications || nextSettings.location_notifications) {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          if (permission.status !== "granted") {
+            throw new Error("Konum izni verilmedi.");
+          }
+
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          await syncNearbyPushSubscription(
+            auth.access_token,
+            true,
+            location.coords.latitude,
+            location.coords.longitude
+          );
+        } else {
+          await syncNearbyPushSubscription(auth.access_token, false, 0, 0);
+        }
+      }
+
+      const savedSettings = await updateNotificationSettings(auth.access_token, {
+        [key]: nextValue,
+      });
+      setSettings((current) => ({ ...current, ...savedSettings }));
+    } catch (error) {
+      setSettings((current) => ({ ...current, [key]: !nextValue }));
+      Alert.alert("Bildirim ayarları", "Ayar kaydedilemedi. Lütfen tekrar deneyin.");
+      console.log("SAVE PROFILE SETTINGS ERROR:", error);
+    }
   };
 
   const initials = auth?.user?.name?.trim()?.charAt(0)?.toUpperCase() || "U";
@@ -334,42 +358,40 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ayarlar</Text>
 
+            <Text style={styles.settingGroupTitle}>Bildirimler</Text>
             {[
               {
-                key: "notifications",
-                label: "Bildirimler",
-                hint: "Cihazda kaydedilir; anlık bildirimler henüz etkin değil",
+                key: "push_notifications",
+                label: "Anlık bildirimler",
+                hint: "Takip ettiğiniz sorunların durum güncellemeleri",
               },
               {
-                key: "emailUpdates",
+                key: "location_notifications",
+                label: "Yakındaki sorunlar",
+                hint: "Konumunuza yakın yeni sorunlar için uyarılar",
+              },
+              {
+                key: "email_notifications",
                 label: "E-posta güncellemeleri",
-                hint: "Cihazda kaydedilir; e-posta gönderimi henüz etkin değil",
-              },
-              {
-                key: "locationAlerts",
-                label: "Konum bildirimleri",
-                hint: "Cihazda kaydedilir; yakın sorun uyarıları henüz etkin değil",
-              },
-              {
-                key: "privateProfile",
-                label: "Gizlilik modu",
-                hint: "Cihazda kaydedilir; profil görünürlüğü henüz değişmiyor",
+                hint: "Yakında kullanılabilir",
               },
             ].map(({ key, label, hint }) => {
               const isEnabled = settings[key as keyof typeof settings];
+              const isEmail = key === "email_notifications";
 
               return (
                 <Pressable
                   key={key}
                   style={styles.settingRow}
-                  onPress={() => toggleSetting(key as keyof typeof settings)}
+                  onPress={() => !isEmail && toggleSetting(key as keyof typeof settings)}
+                  disabled={isEmail}
                 >
                   <View style={styles.settingTextWrap}>
                     <Text style={styles.settingLabel}>{label}</Text>
                     <Text style={styles.settingHint}>{hint}</Text>
                   </View>
 
-                  <View style={[styles.toggle, isEnabled && styles.toggleActive]}>
+                  <View style={[styles.toggle, isEmail && styles.toggleDisabled, isEnabled && styles.toggleActive]}>
                     <View
                       style={[styles.toggleThumb, isEnabled && styles.toggleThumbActive]}
                     />
@@ -377,6 +399,7 @@ export default function ProfileScreen() {
                 </Pressable>
               );
             })}
+
           </View>
 
           <Pressable
@@ -567,6 +590,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 12,
   },
+  settingGroupTitle: {
+    color: "#2563EB",
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
   loadingBox: {
     alignItems: "center",
     justifyContent: "center",
@@ -653,6 +683,9 @@ const styles = StyleSheet.create({
   },
   toggleActive: {
     backgroundColor: "#2563EB",
+  },
+  toggleDisabled: {
+    opacity: 0.55,
   },
   toggleThumb: {
     backgroundColor: "white",

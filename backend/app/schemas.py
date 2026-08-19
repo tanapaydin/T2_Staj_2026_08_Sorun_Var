@@ -31,6 +31,9 @@ class UserResponse(BaseModel):
     avatar_url: str | None = None
     role: str
     email_verified: bool
+    push_notifications: bool
+    location_notifications: bool
+    email_notifications: bool
     created_at: datetime
 
     class Config:
@@ -46,6 +49,27 @@ class AuthResponse(Token):
     user: UserResponse
 
 
+class NotificationSettingsResponse(BaseModel):
+    push_notifications: bool
+    location_notifications: bool
+    email_notifications: bool
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationSettingsUpdate(BaseModel):
+    push_notifications: bool | None = None
+    location_notifications: bool | None = None
+    email_notifications: bool | None = None
+
+
+class PushTokenRegister(BaseModel):
+    token: str
+    latitude: float
+    longitude: float
+
+
 # ---------- REPORT ----------
 
 class ReportCreate(BaseModel):
@@ -54,6 +78,11 @@ class ReportCreate(BaseModel):
     category: str
     latitude: float
     longitude: float
+
+
+class ReportUpdate(BaseModel):
+    status: str | None = None
+    progress: int | None = None
 
 
 class ReportResponse(BaseModel):

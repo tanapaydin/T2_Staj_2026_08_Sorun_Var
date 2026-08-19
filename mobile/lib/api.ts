@@ -33,6 +33,12 @@ export type LocationSuggestion = {
   longitude: number;
 };
 
+export type NotificationSettings = {
+  push_notifications: boolean;
+  location_notifications: boolean;
+  email_notifications: boolean;
+};
+
 
 export type ReportStatistics = {
   total_reports: number;
@@ -87,6 +93,77 @@ async function parseError(
     );
   } catch {
     return "İşlem başarısız oldu.";
+  }
+}
+
+export async function fetchNotificationSettings(
+  accessToken: string
+): Promise<NotificationSettings> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/notifications`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
+export async function updateNotificationSettings(
+  accessToken: string,
+  settings: Partial<NotificationSettings>
+): Promise<NotificationSettings> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/notifications`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(settings),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
+export async function registerPushToken(
+  accessToken: string,
+  token: string,
+  latitude: number,
+  longitude: number
+): Promise<void> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/push-token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token, latitude, longitude }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+}
+
+export async function unregisterPushToken(
+  accessToken: string,
+  token: string
+): Promise<void> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/users/me/push-token?token=${encodeURIComponent(token)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
   }
 }
 

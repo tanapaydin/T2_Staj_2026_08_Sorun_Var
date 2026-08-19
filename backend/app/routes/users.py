@@ -3,8 +3,20 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import User, Report, Comment, ReportFollow, ReportStatusHistory
-from app.schemas import UserResponse
+from app.models import (
+    User,
+    Report,
+    Comment,
+    ReportFollow,
+    ReportStatusHistory,
+    PushSubscription,
+)
+from app.schemas import (
+    NotificationSettingsResponse,
+    NotificationSettingsUpdate,
+    PushTokenRegister,
+    UserResponse,
+)
 
 router = APIRouter(
     prefix="/users",
@@ -15,6 +27,67 @@ router = APIRouter(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/me/notifications", response_model=NotificationSettingsResponse)
+def notification_settings(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user
+
+
+@router.patch("/me/notifications", response_model=NotificationSettingsResponse)
+def update_notification_settings(
+    settings: NotificationSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if hasattr(settings, "model_dump"):
+        changes = settings.model_dump(exclude_unset=True)
+    else:
+        changes = settings.dict(exclude_unset=True)
+    for key, value in changes.items():
+        setattr(current_user, key, value)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/me/push-token", status_code=status.HTTP_204_NO_CONTENT)
+def register_push_token(
+    registration: PushTokenRegister,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    subscription = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.token == registration.token)
+        .first()
+    )
+
+    if subscription is None:
+        subscription = PushSubscription(token=registration.token)
+
+    subscription.user_id = current_user.id
+    subscription.latitude = registration.latitude
+    subscription.longitude = registration.longitude
+    db.add(subscription)
+    db.commit()
+
+
+@router.delete("/me/push-token", status_code=status.HTTP_204_NO_CONTENT)
+def unregister_push_token(
+    token: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db.query(PushSubscription).filter(
+        PushSubscription.token == token,
+        PushSubscription.user_id == current_user.id,
+    ).delete(synchronize_session=False)
+    db.commit()
 
 
 # ============================================================

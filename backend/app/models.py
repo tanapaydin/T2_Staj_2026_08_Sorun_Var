@@ -26,6 +26,9 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     role = Column(String, default="citizen")
     email_verified = Column(Boolean, default=False)
+    push_notifications = Column(Boolean, default=True, nullable=False)
+    location_notifications = Column(Boolean, default=False, nullable=False)
+    email_notifications = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     reports = relationship("Report", back_populates="user")
@@ -35,6 +38,24 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    push_subscriptions = relationship(
+        "PushSubscription",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False)
+    latitude = Column(DOUBLE_PRECISION, nullable=False)
+    longitude = Column(DOUBLE_PRECISION, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="push_subscriptions")
 
 
 class Report(Base):
