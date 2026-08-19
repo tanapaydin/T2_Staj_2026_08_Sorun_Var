@@ -95,10 +95,6 @@ Kategori kullanıcı tarafından zaten seçilmişse "category" alanını null ya
         category = None
 
     return {
-        "category": "road",
-        "title": "Yolda çukur",
-        "description": "Yol yüzeyinde sürüş güvenliğini etkileyen bir çukur tespit edildi.",
-    } 
         "category": category,
         "description": description,
     }

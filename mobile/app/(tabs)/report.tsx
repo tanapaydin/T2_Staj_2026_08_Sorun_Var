@@ -3,6 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+<<<<<<< Updated upstream
+=======
+  Platform,
+>>>>>>> Stashed changes
   ScrollView,
   StyleSheet,
   Text,
@@ -17,12 +21,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
+<<<<<<< Updated upstream
 import MapView, {
   Circle,
   Marker,
   MapPressEvent,
 } from "react-native-maps";
 
+=======
+import type { MapPressEvent } from "react-native-maps";
+>>>>>>> Stashed changes
 import {
   createReport,
   fetchReports,
@@ -31,6 +39,19 @@ import {
 
 import type { Report } from "../../types/report";
 import { getAuthData } from "../../lib/auth";
+
+const isWeb = Platform.OS === "web";
+
+let MapView: any = View;
+let Marker: any = View;
+let Circle: any = View;
+
+if (!isWeb) {
+  const ReactNativeMaps = require("react-native-maps");
+  MapView = ReactNativeMaps.default;
+  Marker = ReactNativeMaps.Marker;
+  Circle = ReactNativeMaps.Circle;
+}
 
 type UserLocation = {
   latitude: number;
