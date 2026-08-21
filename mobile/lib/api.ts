@@ -60,6 +60,10 @@ export type CategoryStatistics = {
   count: number;
 };
 
+export type ScopeStatistics = ReportStatistics & {
+  categories: CategoryStatistics[];
+};
+
 export type StatisticsPeriod =
   | "all"
   | "month"
@@ -616,6 +620,39 @@ export async function fetchCategoryStatistics(): Promise<
   );
 
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// SCOPE STATISTICS
+// ---------------------------------------------------------------------------
+
+export async function fetchScopeStatistics(
+  filters?: Pick<ReportFilters, "city" | "district">
+): Promise<ScopeStatistics> {
+  const params = new URLSearchParams();
+
+  if (filters?.city) {
+    params.append("city", filters.city);
+  }
+
+  if (filters?.district) {
+    params.append("district", filters.district);
+  }
+
+  const queryString = params.toString();
+  const url =
+    `${API_CONFIG.BASE_URL}/reports/statistics/scope` +
+    (queryString ? `?${queryString}` : "");
+
+  console.log("FETCH SCOPE STATISTICS:", url);
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
 }
 
 // ---------------------------------------------------------------------------

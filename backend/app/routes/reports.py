@@ -11,7 +11,7 @@ from fastapi import (
     status,
 )
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -386,6 +386,80 @@ def get_statistics(
     )
 
     return result
+
+
+# ============================================================
+# SCOPE STATISTICS
+# ============================================================
+
+@router.get("/statistics/scope")
+def get_scope_statistics(
+    city: str | None = None,
+    district: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return aggregate data for a report scope without loading its reports."""
+
+    query = db.query(Report)
+
+    if city:
+        query = query.filter(Report.city == city)
+
+    if district:
+        query = query.filter(Report.district == district)
+
+    summary = query.with_entities(
+        func.count(Report.id).label("total_reports"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (Report.progress == 100, 1),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("resolved_reports"),
+        func.coalesce(
+            func.avg(Report.progress),
+            0,
+        ).label("average_progress"),
+    ).one()
+
+    total_reports = int(summary.total_reports or 0)
+    resolved_reports = int(summary.resolved_reports or 0)
+
+    category_rows = (
+        query.with_entities(
+            Report.category,
+            func.count(Report.id).label("count"),
+        )
+        .group_by(Report.category)
+        .order_by(func.count(Report.id).desc())
+        .all()
+    )
+
+    return {
+        "total_reports": total_reports,
+        "resolved_reports": resolved_reports,
+        "pending_reports": total_reports - resolved_reports,
+        "average_progress": round(
+            float(summary.average_progress or 0),
+            2,
+        ),
+        "resolution_rate": round(
+            resolved_reports / total_reports * 100
+            if total_reports
+            else 0,
+            2,
+        ),
+        "categories": [
+            {
+                "category": category,
+                "count": int(count),
+            }
+            for category, count in category_rows
+        ],
+    }
 
 
 # ============================================================

@@ -674,7 +674,6 @@ export default function RecentReports({
         )}
 
         {!hasMore &&
-          activeOverviewPage === 0 &&
           reports.length > 0 && (
             <View
               style={styles.endContainer}
