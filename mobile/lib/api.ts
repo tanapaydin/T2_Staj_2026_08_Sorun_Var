@@ -1,5 +1,6 @@
 import { API_CONFIG } from "../config/api";
 import { Report } from "../types/report";
+import { getAuthData } from "./auth";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -86,17 +87,57 @@ export type TopStatistics = {
 // HELPER
 // ---------------------------------------------------------------------------
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const auth = await getAuthData();
+
+  return auth?.access_token
+    ? { Authorization: `Bearer ${auth.access_token}` }
+    : {};
+}
+
 async function parseError(
   response: Response
 ): Promise<string> {
   try {
     const data = await response.json();
+    const detail = data?.detail;
 
-    return (
-      data?.detail ||
-      data?.message ||
-      "İşlem başarısız oldu."
-    );
+    if (typeof detail === "string") {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((item) => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
+
+          const message =
+            typeof item.msg === "string"
+              ? item.msg
+              : "Geçersiz değer.";
+
+          const field = Array.isArray(item.loc)
+            ? item.loc
+                .filter((part: unknown) => part !== "body")
+                .join(" → ")
+            : "";
+
+          return field ? `${field}: ${message}` : message;
+        })
+        .filter((message): message is string => Boolean(message));
+
+      if (messages.length > 0) {
+        return messages.join("\n");
+      }
+    }
+
+    if (typeof data?.message === "string") {
+      return data.message;
+    }
+
+    return "İşlem başarısız oldu.";
   } catch {
     return "İşlem başarısız oldu.";
   }
@@ -201,6 +242,21 @@ export async function unregisterPushToken(
 // FETCH REPORTS
 // ---------------------------------------------------------------------------
 
+export async function fetchReport(reportId: string) {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/reports/${reportId}`,
+    {
+      headers: await getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
 export async function fetchReports(
   filters?: ReportFilters
 ): Promise<Report[]> {
@@ -288,7 +344,9 @@ export async function fetchReports(
     url
   );
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: await getAuthHeaders(),
+  });
 
   if (!response.ok) {
     const message =
@@ -342,54 +400,24 @@ export async function fetchAllReports(
 // CREATE REPORT
 // ---------------------------------------------------------------------------
 
-export async function createReport(
-  input: CreateReportInput,
-  accessToken: string
-): Promise<Report> {
-  console.log(
-    "CREATE REPORT:",
-    input
-  );
-
+export async function createReport(data: CreateReportInput) {
   const response = await fetch(
-    `${API_CONFIG.BASE_URL}/reports`,
+    `${API_CONFIG.BASE_URL}/reports/`,
     {
       method: "POST",
-
       headers: {
-        Authorization:
-          `Bearer ${accessToken}`,
-
-        "Content-Type":
-          "application/json",
+        "Content-Type": "application/json",
+        ...(await getAuthHeaders()),
       },
-
-      body: JSON.stringify(input),
+      body: JSON.stringify(data),
     }
   );
 
   if (!response.ok) {
-    const message =
-      await parseError(response);
-
-    console.log(
-      "CREATE REPORT ERROR:",
-      response.status,
-      message
-    );
-
-    throw new Error(message);
+    throw new Error(await parseError(response));
   }
 
-  const data: Report =
-    await response.json();
-
-  console.log(
-    "CREATE REPORT RESULT:",
-    data
-  );
-
-  return data;
+  return response.json();
 }
 
 export type AiReportAnalysis = {
@@ -415,7 +443,13 @@ export async function analyzeReportPhotos(
 
   const response = await fetch(
     `${API_CONFIG.BASE_URL}/ai/analyze-image`,
-    { method: "POST", body: formData }
+    {
+      method: "POST",
+      headers: {
+        ...(await getAuthHeaders()),
+      },
+      body: formData,
+    }
   );
 
   if (!response.ok) {

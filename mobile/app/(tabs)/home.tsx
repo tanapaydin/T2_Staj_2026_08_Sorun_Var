@@ -83,6 +83,10 @@ export default function HomeScreen() {
   const resolved = activeReports.filter((report) => report.progress === 100).length;
   const pending = activeReports.length - resolved;
   const rate = activeReports.length ? resolved / activeReports.length * 100 : 0;
+  const generalResolved = stats?.resolved_reports ?? allReports.filter((report) => report.progress === 100).length;
+  const generalPending = stats?.pending_reports ?? allReports.length - generalResolved;
+  const generalRate = stats?.resolution_rate ?? (allReports.length ? generalResolved / allReports.length * 100 : 0);
+  const generalAverageProgress = stats?.average_progress ?? (allReports.length ? allReports.reduce((sum, report) => sum + report.progress, 0) / allReports.length : 0);
 
   async function load() {
     try {
@@ -95,8 +99,8 @@ export default function HomeScreen() {
   async function loadMore() { if (loadingMore || !hasMore) return; setLoadingMore(true); try { const next = await fetchReports({skip:reports.length,limit:PAGE_SIZE,sort:"newest"}); setReports((items) => [...items,...next]); setHasMore(next.length >= PAGE_SIZE); } finally { setLoadingMore(false); } }
   if (loading) return <View style={styles.loading}><ActivityIndicator size="large" color={Colors.primary}/><Text style={styles.text}>Veriler yükleniyor...</Text></View>;
   return <View style={styles.screen}><ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content} scrollEventThrottle={16} onScroll={({nativeEvent}) => setShowScrollTop(nativeEvent.contentOffset.y > 320)} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} />} onMomentumScrollEnd={({nativeEvent}) => { const d=nativeEvent.contentSize.height-(nativeEvent.layoutMeasurement.height+nativeEvent.contentOffset.y); if(d<100) void loadMore(); }}>
-    <HomeHero totalReports={stats?.total_reports ?? 0} resolutionRate={rate}/>
-    <TopStatisticsCard totalReports={activeReports.length} resolvedReports={resolved} pendingReports={pending} averageProgress={activeReports.length ? activeReports.reduce((sum, report) => sum + report.progress, 0) / activeReports.length : 0}/>
+    <HomeHero totalReports={stats?.total_reports ?? allReports.length} resolutionRate={generalRate}/>
+    <TopStatisticsCard totalReports={stats?.total_reports ?? allReports.length} resolvedReports={generalResolved} pendingReports={generalPending} averageProgress={generalAverageProgress}/>
     <ReportScopeCarousel width={width - 40} activePage={activeOverviewPage} onPageChange={setActiveOverviewPage} totalCategories={categories} totalReports={stats?.total_reports ?? 0} city={currentCity} cityCategories={countCategories(cityReports)} cityReports={cityReports.length} municipality={currentMunicipality} municipalityCategories={countCategories(municipalityReports)} municipalityReports={municipalityReports.length}/>
     <ResolutionCard resolutionRate={rate} resolvedReports={resolved} pendingReports={pending}/>
     <RecentReports reports={visibleReports} activeOverviewPage={activeOverviewPage} currentCity={currentCity} currentMunicipality={currentMunicipality} loadingMore={loadingMore} hasMore={hasMore} onLoadMore={loadMore} accessToken={token}/>

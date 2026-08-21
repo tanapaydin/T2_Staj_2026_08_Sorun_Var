@@ -289,7 +289,21 @@ export default function ReportScreen() {
         });
 
       if (photo?.uri) {
-        setPreviewUri(photo.uri);
+        const photoUri = photo.uri;
+
+        setOldReportsOpen(false);
+        setLoadingOldReports(false);
+
+        setPreviewUri(null);
+        setCameraOpen(false);
+
+        setPhotos((current) => {
+          if (current.length >= MAX_PHOTOS) {
+            return current;
+          }
+
+          return [...current, photoUri];
+        });
       }
     } catch {
       Alert.alert(
@@ -593,13 +607,19 @@ const fillWithAI = async () => {
         throw new Error("Rapor göndermek için giriş yapmalısın.");
       }
 
+      const normalizedDescription = description.trim();
+
       await createReport({
-        title: description.trim().slice(0, 100),
+        // Backend rapor için tek kategori ve bir başlık bekliyor.
+        // Kullanıcının yazdığı açıklamayı kısa bir başlık olarak da kullanıyoruz.
+        title: normalizedDescription
+          .replace(/\s+/g, " ")
+          .slice(0, 100),
         category: categoriesSelected[0],
-        description: description.trim(),
+        description: normalizedDescription,
         latitude: location.latitude,
         longitude: location.longitude,
-      }, auth.access_token);
+      });
 
       setSending(false);
 

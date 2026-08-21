@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 
 import { Report } from "../../types/report";
 import { getCategoryLabel } from "../../utils/map";
@@ -18,7 +18,19 @@ import {
 type Props = {
   report: Report | null;
   onClose: () => void;
-  onGoToLocation?: () => void;
+};
+
+const categoryExampleImages: Record<string, string[]> = {
+  road: ["https://loremflickr.com/900/600/pothole,road?lock=101", "https://loremflickr.com/900/600/damaged,road?lock=102"],
+  lighting: ["https://loremflickr.com/900/600/broken,streetlight?lock=201", "https://loremflickr.com/900/600/street,lamp,night?lock=202"],
+  trash: ["https://loremflickr.com/900/600/overflowing,trash?lock=301", "https://loremflickr.com/900/600/garbage,street?lock=302"],
+  traffic: ["https://loremflickr.com/900/600/traffic,jam,city?lock=401", "https://loremflickr.com/900/600/city,traffic?lock=402"],
+  construction: ["https://loremflickr.com/900/600/road,construction?lock=501", "https://loremflickr.com/900/600/city,construction?lock=502"],
+  water: ["https://loremflickr.com/900/600/flooded,street?lock=601", "https://loremflickr.com/900/600/water,leak,street?lock=602"],
+  park: ["https://loremflickr.com/900/600/dirty,park?lock=701", "https://loremflickr.com/900/600/park,maintenance?lock=702"],
+  noise: ["https://loremflickr.com/900/600/noisy,street,city?lock=801", "https://loremflickr.com/900/600/city,crowd?lock=802"],
+  animal: ["https://loremflickr.com/900/600/stray,dog,city?lock=901", "https://loremflickr.com/900/600/stray,cat,street?lock=902"],
+  other: ["https://loremflickr.com/900/600/city,problem?lock=1001", "https://loremflickr.com/900/600/street,problem?lock=1002"],
 };
 
 function getPriorityLabel(priority?: string) {
@@ -63,7 +75,6 @@ function getStatusColor(status?: string) {
 export default function ReportCard({
   report,
   onClose,
-  onGoToLocation,
 }: Props) {
   if (!report) return null;
 
@@ -75,6 +86,7 @@ export default function ReportCard({
     neighborhood?: string;
     address?: string;
     created_at?: string;
+    image_urls?: string[];
   };
 
   const description =
@@ -103,6 +115,10 @@ export default function ReportCard({
 
   const statusLabel = getStatusLabel(report.status);
   const statusColor = getStatusColor(report.status);
+  const images =
+    Array.isArray(reportDetails.image_urls) && reportDetails.image_urls.length > 0
+      ? reportDetails.image_urls
+      : categoryExampleImages[report.category] ?? categoryExampleImages.other;
 
   return (
     <AppCard style={styles.bottomCard}>
@@ -166,6 +182,16 @@ export default function ReportCard({
           onPress={onClose}
           style={styles.closeIconButton}
         />
+      </View>
+
+      <View style={styles.imageRow}>
+        {images.slice(0, 2).map((image, index) => (
+          <Image
+            key={`${image}-${index}`}
+            source={{ uri: image }}
+            style={styles.reportImage}
+          />
+        ))}
       </View>
 
       {/* DESCRIPTION */}
@@ -309,18 +335,27 @@ export default function ReportCard({
             {report.view_count}
           </AppText>
         </View>
+
+        <View style={styles.metaItem}>
+          <AppText
+            variant="bodyMedium"
+            color={Colors.textSecondary}
+            style={styles.infoLabel}
+          >
+            Takipçi
+          </AppText>
+
+          <AppText
+            variant="bodyMedium"
+            style={styles.infoValue}
+          >
+            {report.follower_count ?? 0}
+          </AppText>
+        </View>
       </View>
 
       {/* ACTIONS */}
       <View style={styles.actions}>
-        {onGoToLocation && (
-          <AppButton
-            title="Şikayetin Konumuna Git"
-            onPress={onGoToLocation}
-            style={styles.locationButton}
-          />
-        )}
-
         <AppButton
           title="Kapat"
           variant="secondary"
@@ -534,6 +569,19 @@ const styles = StyleSheet.create({
 
   locationButton: {
     marginTop: Spacing.xs,
+  },
+
+  imageRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+
+  reportImage: {
+    flex: 1,
+    height: 105,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceSecondary,
   },
 
   closeButton: {

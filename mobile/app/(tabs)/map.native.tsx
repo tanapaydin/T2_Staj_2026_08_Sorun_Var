@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Platform, StyleSheet, View, ActivityIndicator } from "react-native";
 
 import { useReports } from "../../hooks/useReports";
@@ -48,6 +48,8 @@ if (!isWeb) {
 
 export default function MapScreen() {
   const mapRef = useRef<any>(null);
+  const handledReportIdRef = useRef<string | null>(null);
+  const isAutoOpeningReportRef = useRef(false);
 
   const {
     reportId,
@@ -86,24 +88,53 @@ export default function MapScreen() {
     handleSearchCity,
     handleRegionCity,
     showSearchArea,
+    showReportsForCity,
     showCurrentCity,
     showAllCities,
   } = useMapCityFilter(reports, currentCity);
 
   useEffect(() => {
     if (!reportId) {
+      handledReportIdRef.current = null;
       return;
     }
 
-    const report = visibleReports.find(
-      (item) => String(item.id) === String(reportId)
+    const requestedReportId = String(reportId);
+
+    if (handledReportIdRef.current === requestedReportId) {
+      return;
+    }
+
+    const report = reports.find(
+      (item) => String(item.id) === requestedReportId
     );
 
     if (report) {
+      // Aynı yönlendirme parametresi açık kaldığı sürece raporu yalnızca
+      // bir kez otomatik aç. Aksi halde kullanıcı kartı kapattığında
+      // useEffect kartı tekrar görünür hale getirir.
+      handledReportIdRef.current = requestedReportId;
+      isAutoOpeningReportRef.current = true;
+
+      // Ana sayfadan açılan rapor kullanıcının ilinin dışında olabilir.
+      // Bu nedenle kartı göstermeden önce raporun bulunduğu ili otomatik seçiyoruz.
+      showReportsForCity(
+        report.city?.trim() ||
+          detectCity(report.latitude, report.longitude)
+      );
       setSelectedCity(null);
       setSelectedReport(report);
     }
-  }, [reportId, visibleReports]);
+  }, [reportId, reports, showReportsForCity]);
+
+  function closeSelectedReport() {
+    setSelectedReport(null);
+
+    // Kart kapatıldıktan sonra aynı raporun otomatik açılmasını önlemek için
+    // sadece yönlendirme kimliğini temizliyoruz. Koordinatlar harita
+    // görünümünün bulunduğu yerde kalmasını sağlar.
+    router.setParams({ reportId: undefined });
+  }
 
   const [filterVisible, setFilterVisible] = useState(false);
 
@@ -345,6 +376,13 @@ export default function MapScreen() {
           ) => {
             setRegion(newRegion);
 
+            // Ana sayfadan gelen raporun konumuna harita otomatik giderken
+            // bu hareketi kullanıcı araması olarak değerlendirme.
+            if (isAutoOpeningReportRef.current) {
+              isAutoOpeningReportRef.current = false;
+              return;
+            }
+
             const city = detectCity(
               newRegion.latitude,
               newRegion.longitude
@@ -441,20 +479,7 @@ export default function MapScreen() {
       {/* Seçilen rapor */}
       <ReportCard
         report={selectedReport}
-        onClose={() => setSelectedReport(null)}
-        onGoToLocation={() => {
-          if (!selectedReport) return;
-
-          mapRef.current?.animateToRegion(
-            {
-              latitude: selectedReport.latitude,
-              longitude: selectedReport.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            },
-            800
-          );
-        }}
+        onClose={closeSelectedReport}
       />
       <CitySummaryCard
         city={selectedCity}

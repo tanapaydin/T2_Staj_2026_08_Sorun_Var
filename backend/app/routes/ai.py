@@ -84,6 +84,26 @@ async def analyze_report_image(
     except HTTPException:
         raise
 
+    except RuntimeError as error:
+        print(
+            "AI ANALİZ HATASI:",
+            repr(error),
+        )
+
+        if "GEMINI_API_KEY" in str(error):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Yapay zeka hizmeti henüz yapılandırılmamış. "
+                    "GEMINI_API_KEY değerini ekleyip backend'i yeniden başlatın."
+                ),
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Fotoğraf yapay zeka tarafından analiz edilemedi.",
+        )
+
     except Exception as error:
         print(
             "AI ANALİZ HATASI:",
