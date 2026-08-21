@@ -1,6 +1,7 @@
 import { API_CONFIG } from "../config/api";
 import { Report } from "../types/report";
 import { getAuthData } from "./auth";
+import type { AuthResponse } from "./auth";
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -78,7 +79,6 @@ export type NotificationSettings = {
 
 export type ProfileUpdate = {
   name?: string;
-  email?: string;
   avatar_url?: string | null;
 };
 
@@ -237,6 +237,46 @@ export async function updatePassword(
   if (!response.ok) {
     throw new Error(await parseError(response));
   }
+}
+
+export async function requestEmailChange(
+  accessToken: string,
+  newEmail: string
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/email/request-change`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ new_email: newEmail }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
+export async function confirmEmailChange(
+  accessToken: string,
+  code: string
+): Promise<AuthResponse> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/email/confirm-change`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ code }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
 }
 
 export async function updateNotificationSettings(

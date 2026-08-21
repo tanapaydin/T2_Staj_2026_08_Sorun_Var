@@ -11,8 +11,13 @@ from app.models import (
     ReportStatusHistory,
     ReportImage,
     PushSubscription,
+    VerificationCode,
 )
 from app.schemas import (
+    AuthResponse,
+    EmailChangeConfirm,
+    EmailChangeRequest,
+    MessageResponse,
     NotificationSettingsResponse,
     NotificationSettingsUpdate,
     PasswordUpdate,
@@ -21,6 +26,13 @@ from app.schemas import (
     UserResponse,
 )
 from app.utils.security import hash_password, verify_password
+from app.utils.jwt import create_access_token
+from app.services.email_service import send_email
+from app.services.verification import (
+    CODE_EXPIRY_MINUTES,
+    create_verification_code,
+    resolve_verification_code,
+)
 
 router = APIRouter(
     prefix="/users",
@@ -48,17 +60,6 @@ def update_profile(
     if "name" in changes and not changes["name"].strip():
         raise HTTPException(status_code=400, detail="Ad alanı boş olamaz.")
 
-    if "email" in changes:
-        normalized_email = changes["email"].lower()
-        existing_user = (
-            db.query(User)
-            .filter(User.email == normalized_email, User.id != current_user.id)
-            .first()
-        )
-        if existing_user:
-            raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı.")
-        changes["email"] = normalized_email
-
     for key, value in changes.items():
         setattr(current_user, key, value.strip() if isinstance(value, str) and key == "name" else value)
 
@@ -66,6 +67,74 @@ def update_profile(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.post("/me/email/request-change", response_model=MessageResponse)
+def request_email_change(
+    payload: EmailChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    normalized_email = payload.new_email.lower()
+
+    if normalized_email == current_user.email:
+        raise HTTPException(status_code=400, detail="Yeni e-posta mevcut e-postanızla aynı.")
+
+    existing_user = (
+        db.query(User)
+        .filter(User.email == normalized_email, User.id != current_user.id)
+        .first()
+    )
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı.")
+
+    code = create_verification_code(db, normalized_email, "email_change", user_id=current_user.id)
+    send_email(
+        to_email=normalized_email,
+        subject="Sorun Var - E-posta Değişikliği Doğrulama Kodu",
+        body=(
+            "E-posta adresinizi değiştirmek için aşağıdaki kodu kullanın.\n\n"
+            f"Doğrulama kodunuz: {code}\n\n"
+            f"Bu kod {CODE_EXPIRY_MINUTES} dakika içinde geçerliliğini yitirecektir."
+        ),
+    )
+    db.commit()
+
+    return {"message": "Doğrulama kodu yeni e-posta adresinize gönderildi."}
+
+
+@router.post("/me/email/confirm-change", response_model=AuthResponse)
+def confirm_email_change(
+    payload: EmailChangeConfirm,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = resolve_verification_code(db, "email_change", payload.code, user_id=current_user.id)
+    if not record:
+        raise HTTPException(status_code=400, detail="Kod geçersiz veya süresi dolmuş.")
+
+    existing_user = (
+        db.query(User)
+        .filter(User.email == record.email, User.id != current_user.id)
+        .first()
+    )
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Bu e-posta zaten kayıtlı.")
+
+    current_user.email = record.email
+    current_user.email_verified = True
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    access_token = create_access_token(
+        {"sub": str(current_user.id), "email": current_user.email}
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": current_user,
+    }
 
 
 @router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
@@ -204,6 +273,10 @@ def delete_me(
 ):
     # Remove reports created by the user (Report cascade will remove images, comments, history)
     try:
+        db.query(VerificationCode).filter(
+            VerificationCode.user_id == current_user.id
+        ).delete(synchronize_session=False)
+
         owned_report_ids = [
             report_id
             for (report_id,) in db.query(Report.id)

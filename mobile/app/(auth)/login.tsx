@@ -47,7 +47,17 @@ export default function LoginScreen() {
       await login(trimmedEmail, trimmedPassword);
       router.replace("/(tabs)/map");
     } catch (error) {
-      Alert.alert("Giriş Başarısız", error instanceof Error ? error.message : "Bir hata oluştu.");
+      const message = error instanceof Error ? error.message : "Bir hata oluştu.";
+
+      if (message.includes("doğrulamanız gerekiyor")) {
+        router.push({
+          pathname: "/(auth)/verify-email",
+          params: { email: trimmedEmail },
+        });
+        return;
+      }
+
+      Alert.alert("Giriş Başarısız", message);
     } finally {
       setLoading(false);
     }
@@ -98,6 +108,10 @@ export default function LoginScreen() {
 
         <Pressable style={styles.button} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Giriş Yap</Text>}
+        </Pressable>
+
+        <Pressable onPress={() => router.push("/(auth)/forgot-password")}>
+          <Text style={styles.linkText}>Şifremi Unuttum</Text>
         </Pressable>
 
         <Pressable onPress={() => router.push("/(auth)/register")}> 

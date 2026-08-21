@@ -27,6 +27,8 @@ import {
   updatePassword,
   updateNotificationSettings,
   unfollowReport,
+  requestEmailChange,
+  confirmEmailChange,
 } from "../../lib/api";
 import { Report } from "../../types/report";
 import { categoryLabels, statusLabels } from "../../constants/report";
@@ -40,6 +42,8 @@ const roleLabels: Record<string, string> = {
   municipality: "Belediye",
   admin: "Yönetici",
 };
+
+const EMAIL_CODE_EXPIRY_SECONDS = 3 * 60;
 
 type ProfileSettings = {
   push_notifications: boolean;
@@ -62,8 +66,13 @@ export default function ProfileScreen() {
   const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showEmailSettings, setShowEmailSettings] = useState(false);
-  const [emailSettingsView, setEmailSettingsView] = useState<"menu" | "email" | "password">("menu");
+  const [emailSettingsView, setEmailSettingsView] = useState<"menu" | "email" | "email-code" | "password">("menu");
   const [savingEmail, setSavingEmail] = useState(false);
+  const [pendingNewEmail, setPendingNewEmail] = useState("");
+  const [emailChangeCode, setEmailChangeCode] = useState("");
+  const [confirmingEmailChange, setConfirmingEmailChange] = useState(false);
+  const [resendingEmailCode, setResendingEmailCode] = useState(false);
+  const [emailCodeSecondsLeft, setEmailCodeSecondsLeft] = useState(0);
   const [showAccountInfo, setShowAccountInfo] = useState(false);
   const [draftCurrentPassword, setDraftCurrentPassword] = useState("");
   const [draftNewPassword, setDraftNewPassword] = useState("");
@@ -139,6 +148,14 @@ export default function ProfileScreen() {
       };
     }, [])
   );
+
+  useEffect(() => {
+    if (emailCodeSecondsLeft <= 0) return;
+    const timer = setInterval(() => {
+      setEmailCodeSecondsLeft((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [emailCodeSecondsLeft]);
 
   const matchesDateFilter = (report: Report, filter: string) => {
     if (filter === "all") return true;
@@ -226,9 +243,9 @@ export default function ProfileScreen() {
               const { deleteAccount } = await import("../../lib/api");
               await deleteAccount(auth.access_token);
               await clearAuthData();
-              setAuth(null);
               setFollowedReports([]);
-              router.replace("/(auth)/login");
+              router.dismissTo("/(auth)/login");
+              setAuth(null);
             } catch (err) {
               console.log("DELETE ACCOUNT ERROR", err);
               Alert.alert("Hata", String(err));
@@ -431,23 +448,24 @@ export default function ProfileScreen() {
     setShowCurrentPassword(false);
     setShowNewPassword(false);
     setShowConfirmPassword(false);
+    setPendingNewEmail("");
+    setEmailChangeCode("");
+    setEmailCodeSecondsLeft(0);
   };
 
-  const saveEmail = async (nextEmail: string) => {
+  const requestEmailChangeCode = async (nextEmail: string) => {
     if (!auth) return;
 
     try {
       setSavingEmail(true);
-      const updatedUser = await updateProfile(auth.access_token, {
-        email: nextEmail,
-      });
-      const updatedAuth = { ...auth, user: updatedUser };
-      await AsyncStorage.setItem("SORUN_VAR_AUTH", JSON.stringify(updatedAuth));
-      setAuth(updatedAuth);
-      setEmailSettingsView("menu");
+      await requestEmailChange(auth.access_token, nextEmail);
+      setPendingNewEmail(nextEmail);
+      setEmailChangeCode("");
+      setEmailCodeSecondsLeft(EMAIL_CODE_EXPIRY_SECONDS);
+      setEmailSettingsView("email-code");
     } catch (error) {
       Alert.alert(
-        "E-posta güncellenemedi",
+        "Kod gönderilemedi",
         error instanceof Error ? error.message : "Lütfen tekrar deneyin."
       );
     } finally {
@@ -480,9 +498,53 @@ export default function ProfileScreen() {
       `E-posta adresinizi "${nextEmail}" olarak değiştirmek üzeresiniz. Onaylıyor musunuz?`,
       [
         { text: "Vazgeç", style: "cancel" },
-        { text: "Onayla", onPress: () => saveEmail(nextEmail) },
+        { text: "Onayla", onPress: () => requestEmailChangeCode(nextEmail) },
       ]
     );
+  };
+
+  const handleConfirmEmailChange = async () => {
+    if (!auth) return;
+
+    const trimmedCode = emailChangeCode.trim();
+    if (!trimmedCode) {
+      Alert.alert("Hata", "Lütfen doğrulama kodunu girin.");
+      return;
+    }
+
+    try {
+      setConfirmingEmailChange(true);
+      const updatedAuth = await confirmEmailChange(auth.access_token, trimmedCode);
+      await AsyncStorage.setItem("SORUN_VAR_AUTH", JSON.stringify(updatedAuth));
+      setAuth(updatedAuth);
+      setPendingNewEmail("");
+      setEmailChangeCode("");
+      setEmailSettingsView("menu");
+      Alert.alert("Başarılı", "E-posta adresiniz güncellendi.");
+    } catch (error) {
+      Alert.alert(
+        "E-posta güncellenemedi",
+        error instanceof Error ? error.message : "Lütfen tekrar deneyin."
+      );
+    } finally {
+      setConfirmingEmailChange(false);
+    }
+  };
+
+  const handleResendEmailChangeCode = async () => {
+    if (!auth || !pendingNewEmail) return;
+
+    try {
+      setResendingEmailCode(true);
+      await requestEmailChange(auth.access_token, pendingNewEmail);
+      setEmailCodeSecondsLeft(EMAIL_CODE_EXPIRY_SECONDS);
+      setEmailChangeCode("");
+      Alert.alert("Kod Gönderildi", "Yeni doğrulama kodu e-posta adresinize gönderildi.");
+    } catch (error) {
+      Alert.alert("Hata", error instanceof Error ? error.message : "Kod tekrar gönderilemedi.");
+    } finally {
+      setResendingEmailCode(false);
+    }
   };
 
   const savePassword = async (currentPassword: string, newPassword: string) => {
@@ -1058,9 +1120,66 @@ export default function ProfileScreen() {
                       </Pressable>
 
                       <Pressable style={styles.primaryAction} onPress={handleSaveEmail} disabled={savingEmail}>
-                        {savingEmail ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kaydet</Text>}
+                        {savingEmail ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kod Gönder</Text>}
                       </Pressable>
                     </View>
+                  </>
+                )}
+
+                {emailSettingsView === "email-code" && (
+                  <>
+                    <Text style={styles.settingGroupTitle}>E-posta Doğrulama</Text>
+                    <Text style={styles.settingHint}>
+                      {pendingNewEmail} adresine gönderilen 6 haneli kodu girin.
+                    </Text>
+
+                    <Text style={styles.inputLabel}>Doğrulama Kodu</Text>
+                    <TextInput
+                      value={emailChangeCode}
+                      onChangeText={setEmailChangeCode}
+                      style={styles.input}
+                      placeholder="123456"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      placeholderTextColor="#94A3B8"
+                    />
+
+                    <Text style={styles.emailCodeTimerText}>
+                      {emailCodeSecondsLeft > 0
+                        ? `Kod ${Math.floor(emailCodeSecondsLeft / 60)}:${String(emailCodeSecondsLeft % 60).padStart(2, "0")} içinde geçersiz olacak`
+                        : "Kodun süresi doldu"}
+                    </Text>
+
+                    <View style={styles.editActions}>
+                      <Pressable
+                        style={[styles.secondaryAction, styles.cancelAction]}
+                        onPress={() => {
+                          setPendingNewEmail("");
+                          setEmailChangeCode("");
+                          setEmailSettingsView("menu");
+                        }}
+                      >
+                        <Text style={styles.secondaryActionText}>İptal</Text>
+                      </Pressable>
+
+                      <Pressable
+                        style={styles.primaryAction}
+                        onPress={handleConfirmEmailChange}
+                        disabled={confirmingEmailChange}
+                      >
+                        {confirmingEmailChange ? (
+                          <ActivityIndicator color="white" />
+                        ) : (
+                          <Text style={styles.primaryActionText}>Doğrula</Text>
+                        )}
+                      </Pressable>
+                    </View>
+
+                    <Pressable onPress={handleResendEmailChangeCode} disabled={resendingEmailCode}>
+                      <Text style={styles.emailCodeResendText}>
+                        {resendingEmailCode ? "Gönderiliyor..." : "Kodu tekrar gönder"}
+                      </Text>
+                    </Pressable>
                   </>
                 )}
 
@@ -1544,6 +1663,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     marginLeft: 2,
+  },
+  emailCodeTimerText: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  emailCodeResendText: {
+    color: "#2563EB",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 14,
+    textAlign: "center",
   },
   passwordContainer: {
     justifyContent: "center",
