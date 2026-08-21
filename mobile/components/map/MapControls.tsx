@@ -59,8 +59,10 @@ const styles = StyleSheet.create({
   searchAreaContainer: {
     position: "absolute",
     top: Layout.mapSearchAreaTop,
-    right: Layout.mapSideInset,
-    zIndex: 1000,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 18,
     ...Shadows.lg,
   },
   searchAreaButton: {

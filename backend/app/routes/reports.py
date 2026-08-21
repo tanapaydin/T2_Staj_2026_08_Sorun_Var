@@ -200,6 +200,7 @@ def list_reports(
         {
             "id": str(report.id),
             "title": report.title,
+            "description": report.description,
             "category": report.category,
 
             "latitude": report.latitude,
