@@ -65,6 +65,16 @@ export function useMapCityFilter(
     setShowSearchAreaButton(false);
   }
 
+  function showReportsForCity(city: string | null) {
+    if (!city) {
+      return;
+    }
+
+    setSearchedCity(city);
+    setCityFilterMode("search");
+    setShowSearchAreaButton(false);
+  }
+
   function showCurrentCity() {
     setCityFilterMode("current");
     setShowSearchAreaButton(false);
@@ -117,6 +127,7 @@ export function useMapCityFilter(
     handleSearchCity,
     handleRegionCity,
     showSearchArea,
+    showReportsForCity,
     showCurrentCity,
     showAllCities,
   };

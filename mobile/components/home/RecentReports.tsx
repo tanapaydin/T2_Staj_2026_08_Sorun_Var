@@ -2,6 +2,8 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,6 +11,7 @@ import {
 } from "react-native";
 import { useState, useEffect } from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import { Report } from "../../types/report";
 import {
@@ -22,6 +25,17 @@ import {
   followReport,
   unfollowReport,
 } from "../../lib/api";
+
+const isWeb = Platform.OS === "web";
+
+let MapView: any = View;
+let Marker: any = View;
+
+if (!isWeb) {
+  const ReactNativeMaps = require("react-native-maps");
+  MapView = ReactNativeMaps.default;
+  Marker = ReactNativeMaps.Marker;
+}
 
 type RecentReportsProps = {
   reports: Report[];
@@ -253,6 +267,25 @@ export default function RecentReports({
     }
 
     return "Detaylı adres bilgisi bulunmuyor.";
+  }
+
+  function getAddressSummary(
+    report: ReportWithOptionalDetails
+  ) {
+    const address = report.address?.trim();
+    const area = [
+      report.neighborhood?.trim(),
+      report.district?.trim(),
+      report.city?.trim(),
+    ].filter(Boolean);
+
+    if (address) {
+      return address;
+    }
+
+    return area.length > 0
+      ? area.join(" · ")
+      : getLocationSummary(report);
   }
 
   function getCoordinates(
@@ -515,23 +548,19 @@ export default function RecentReports({
                   typedReport
                 )}
 
-                {/* KISA KONUM */}
-                <View
-                  style={styles.reportLocationRow}
-                >
-                  <Text
+                <View style={styles.reportLocationRow}>
+                  <Ionicons
+                    name="location-outline"
+                    size={15}
+                    color="#64748B"
                     style={styles.reportLocationIcon}
-                  >
-                    📍
-                  </Text>
+                  />
 
                   <Text
                     style={styles.reportLocationText}
-                    numberOfLines={1}
+                    numberOfLines={2}
                   >
-                    {getLocationSummary(
-                      typedReport
-                    )}
+                    {getAddressSummary(typedReport)}
                   </Text>
                 </View>
 
@@ -667,7 +696,11 @@ export default function RecentReports({
         }
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <ScrollView
+            style={styles.modalCard}
+            contentContainerStyle={styles.modalCardContent}
+            showsVerticalScrollIndicator={false}
+          >
             {selectedReport && (
               <>
                 <View style={styles.modalHeader}>
@@ -785,6 +818,41 @@ export default function RecentReports({
                 >
                   Konum
                 </Text>
+
+                <View style={styles.detailMapPreview}>
+                  {isWeb ? (
+                    <View style={styles.mapWebFallback}>
+                      <Ionicons
+                        name="location"
+                        size={30}
+                        color={Colors.primary}
+                      />
+                    </View>
+                  ) : (
+                    <MapView
+                      style={styles.detailMap}
+                      initialRegion={{
+                        latitude: selectedReport.latitude,
+                        longitude: selectedReport.longitude,
+                        latitudeDelta: 0.008,
+                        longitudeDelta: 0.008,
+                      }}
+                      scrollEnabled={false}
+                      zoomEnabled={false}
+                      rotateEnabled={false}
+                      pitchEnabled={false}
+                      pointerEvents="none"
+                    >
+                      <Marker
+                        coordinate={{
+                          latitude: selectedReport.latitude,
+                          longitude: selectedReport.longitude,
+                        }}
+                        pinColor={Colors.primary}
+                      />
+                    </MapView>
+                  )}
+                </View>
 
                 <View
                   style={styles.locationBox}
@@ -1016,7 +1084,7 @@ export default function RecentReports({
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </>
@@ -1189,13 +1257,13 @@ const styles = StyleSheet.create({
 
   reportLocationRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 13,
   },
 
   reportLocationIcon: {
-    fontSize: 13,
     marginRight: 6,
+    marginTop: 1,
   },
 
   reportLocationText: {
@@ -1313,8 +1381,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    padding: 20,
     maxHeight: "88%",
+  },
+
+  modalCardContent: {
+    padding: 20,
   },
 
   modalHeader: {
@@ -1374,6 +1445,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 18,
+  },
+
+  detailMapPreview: {
+    height: 150,
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+
+  detailMap: {
+    width: "100%",
+    height: "100%",
+  },
+
+  mapWebFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFF6FF",
   },
 
   locationBox: {

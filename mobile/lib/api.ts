@@ -100,12 +100,44 @@ async function parseError(
 ): Promise<string> {
   try {
     const data = await response.json();
+    const detail = data?.detail;
 
-    return (
-      data?.detail ||
-      data?.message ||
-      "İşlem başarısız oldu."
-    );
+    if (typeof detail === "string") {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((item) => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
+
+          const message =
+            typeof item.msg === "string"
+              ? item.msg
+              : "Geçersiz değer.";
+
+          const field = Array.isArray(item.loc)
+            ? item.loc
+                .filter((part: unknown) => part !== "body")
+                .join(" → ")
+            : "";
+
+          return field ? `${field}: ${message}` : message;
+        })
+        .filter((message): message is string => Boolean(message));
+
+      if (messages.length > 0) {
+        return messages.join("\n");
+      }
+    }
+
+    if (typeof data?.message === "string") {
+      return data.message;
+    }
+
+    return "İşlem başarısız oldu.";
   } catch {
     return "İşlem başarısız oldu.";
   }
@@ -368,13 +400,7 @@ export async function fetchAllReports(
 // CREATE REPORT
 // ---------------------------------------------------------------------------
 
-export async function createReport(data: {
-  photos: string[];
-  categories: string[];
-  description: string;
-  latitude: number;
-  longitude: number;
-}) {
+export async function createReport(data: CreateReportInput) {
   const response = await fetch(
     `${API_CONFIG.BASE_URL}/reports/`,
     {

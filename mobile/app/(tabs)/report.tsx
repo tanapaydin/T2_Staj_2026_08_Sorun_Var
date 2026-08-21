@@ -607,10 +607,16 @@ const fillWithAI = async () => {
         throw new Error("Rapor göndermek için giriş yapmalısın.");
       }
 
+      const normalizedDescription = description.trim();
+
       await createReport({
-        photos,
-        categories: categoriesSelected,
-        description: description.trim(),
+        // Backend rapor için tek kategori ve bir başlık bekliyor.
+        // Kullanıcının yazdığı açıklamayı kısa bir başlık olarak da kullanıyoruz.
+        title: normalizedDescription
+          .replace(/\s+/g, " ")
+          .slice(0, 100),
+        category: categoriesSelected[0],
+        description: normalizedDescription,
         latitude: location.latitude,
         longitude: location.longitude,
       });
