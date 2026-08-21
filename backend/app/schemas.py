@@ -117,7 +117,17 @@ class ReportCreate(BaseModel):
 class ReportUpdate(BaseModel):
     status: str | None = None
     progress: int | None = None
+class ReportImageResponse(BaseModel):
 
+    id: UUID
+
+    image_url: str
+
+    created_at: datetime
+
+    class Config:
+
+        from_attributes = True
 
 class ReportResponse(BaseModel):
     id: UUID
@@ -140,7 +150,7 @@ class ReportResponse(BaseModel):
     view_count: int
     follower_count: int
     created_at: datetime
-
+    images: list[ReportImageResponse] = []
     class Config:
         from_attributes = True
 

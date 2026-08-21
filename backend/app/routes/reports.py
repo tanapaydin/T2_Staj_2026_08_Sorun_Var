@@ -1283,4 +1283,9 @@ def get_report(
             if report.updated_at
             else None
         ),
+
+        "image_urls": [
+            image.image_url
+            for image in report.images
+        ],
     }

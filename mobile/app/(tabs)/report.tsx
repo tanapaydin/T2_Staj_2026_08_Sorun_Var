@@ -115,6 +115,7 @@ export default function ReportScreen() {
   const cameraRef = useRef<CameraView>(null);
 
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [previewUri, setPreviewUri] =
     useState<string | null>(null);
 
@@ -244,33 +245,19 @@ export default function ReportScreen() {
     }
   };
 
-  const openReport = async () => {
-    // Yeni rapor akışına girerken eski raporlar modalı kesinlikle kapalı olsun.
-    setOldReportsOpen(false);
-    setLoadingOldReports(false);
-    setOldReports([]);
+const openReport = async () => {
+  setOldReportsOpen(false);
+  setLoadingOldReports(false);
+  setOldReports([]);
 
-    if (!permission?.granted) {
-      const result = await requestPermission();
+  setReportOpen(true);
 
-      if (!result.granted) {
-        Alert.alert(
-          "Kamera İzni",
-          "Rapor oluşturmak için kamera iznine izin vermen gerekiyor."
-        );
+  if (!originalLocation) {
+    await getCurrentLocation();
+  }
 
-        return;
-      }
-    }
-
-    // Konum daha önce alınamadıysa tekrar dene.
-    if (!originalLocation) {
-      await getCurrentLocation();
-    }
-
-    setPreviewUri(null);
-    setCameraOpen(true);
-  };
+  setPreviewUri(null);
+};
 
   const takePhoto = async () => {
     if (!cameraRef.current) return;
@@ -843,9 +830,17 @@ const fillWithAI = async () => {
             showsVerticalScrollIndicator={false}
           >
             {oldReports.map((report) => (
-              <View
+              <TouchableOpacity
                 key={report.id}
                 style={styles.oldReportCard}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Alert.alert(
+                    report.title,
+                    report.description ||
+                      "Bu rapor için açıklama bulunmuyor."
+                  );
+                }}
               >
                 <View style={styles.oldReportTop}>
                   <Text style={styles.oldReportTitle}>
@@ -884,7 +879,7 @@ const fillWithAI = async () => {
                     ]}
                   />
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </ScrollView>
         )}
@@ -895,7 +890,7 @@ const fillWithAI = async () => {
   /*
    * RAPOR BAŞLANGIÇ EKRANI
    */
-  if (photos.length === 0) {
+  if (!reportOpen) {
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView
@@ -975,6 +970,7 @@ const fillWithAI = async () => {
           <View style={styles.formHeader}>
             <TouchableOpacity
               onPress={() => {
+                setReportOpen(false);
                 setPhotos([]);
                 setDescription("");
                 setCategoriesSelected([]);
@@ -1147,7 +1143,7 @@ const fillWithAI = async () => {
               />
             ) : (
               <Text style={styles.aiButtonText}>
-                ✨ Yapay Zeka ile Doldur
+                Yapay Zeka ile Doldur
               </Text>
             )}
           </TouchableOpacity>
@@ -1881,8 +1877,9 @@ const styles = StyleSheet.create({
 
   aiButtonText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   aiText: {
