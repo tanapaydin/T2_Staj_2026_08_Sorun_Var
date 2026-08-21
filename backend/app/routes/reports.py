@@ -11,7 +11,7 @@ from fastapi import (
     status,
 )
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -200,6 +200,7 @@ def list_reports(
         {
             "id": str(report.id),
             "title": report.title,
+            "description": report.description,
             "category": report.category,
 
             "latitude": report.latitude,
@@ -225,6 +226,227 @@ def list_reports(
         }
         for report in reports
     ]
+
+
+# ============================================================
+# MAP REPORT LIST
+# ============================================================
+
+@router.get("/map")
+def list_map_reports(
+    north: float | None = Query(None, ge=-90, le=90),
+    south: float | None = Query(None, ge=-90, le=90),
+    east: float | None = Query(None, ge=-180, le=180),
+    west: float | None = Query(None, ge=-180, le=180),
+    city: str | None = None,
+    district: str | None = None,
+    category: str | None = None,
+    resolved: bool | None = None,
+    priority: str | None = None,
+    date: str | None = None,
+    limit: int = Query(500, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
+    """Return map markers and whether the user should zoom in further."""
+
+    bounds = (north, south, east, west)
+    has_any_bound = any(value is not None for value in bounds)
+    has_all_bounds = all(value is not None for value in bounds)
+
+    if has_any_bound and not has_all_bounds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Harita alanı için dört sınırın tamamı gereklidir.",
+        )
+
+    if has_all_bounds:
+        assert north is not None
+        assert south is not None
+        assert east is not None
+        assert west is not None
+
+        if south >= north or west >= east:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Harita sınırları geçerli değil.",
+            )
+
+    query = db.query(Report)
+
+    if has_all_bounds:
+        query = query.filter(
+            Report.latitude >= south,
+            Report.latitude <= north,
+            Report.longitude >= west,
+            Report.longitude <= east,
+        )
+
+    if city:
+        query = query.filter(Report.city == city)
+
+    if district:
+        query = query.filter(Report.district == district)
+
+    if category and category != "all":
+        query = query.filter(Report.category == category)
+
+    if resolved is True:
+        query = query.filter(Report.progress == 100)
+    elif resolved is False:
+        query = query.filter(Report.progress < 100)
+
+    if priority:
+        query = query.filter(Report.priority == priority)
+
+    if date:
+        now = datetime.utcnow()
+
+        if date == "today":
+            start = now.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            query = query.filter(Report.created_at >= start)
+        elif date == "7d":
+            query = query.filter(
+                Report.created_at >= now - timedelta(days=7)
+            )
+        elif date == "30d":
+            query = query.filter(
+                Report.created_at >= now - timedelta(days=30)
+            )
+
+    fetched_reports = (
+        query
+        .order_by(
+            Report.created_at.desc(),
+            Report.id.desc(),
+        )
+        .limit(limit + 1)
+        .all()
+    )
+    has_more = len(fetched_reports) > limit
+    reports = fetched_reports[:limit]
+
+    return {
+        "reports": [
+            {
+                "id": str(report.id),
+                "title": report.title,
+                "description": report.description,
+                "category": report.category,
+                "latitude": report.latitude,
+                "longitude": report.longitude,
+                "city": report.city,
+                "municipality": report.municipality,
+                "district": report.district,
+                "neighborhood": report.neighborhood,
+                "address": report.address,
+                "status": report.status,
+                "progress": report.progress,
+                "priority": report.priority,
+                "view_count": report.view_count,
+                "follower_count": report.follower_count or 0,
+                "created_at": (
+                    report.created_at.isoformat()
+                    if report.created_at
+                    else None
+                ),
+            }
+            for report in reports
+        ],
+        "has_more": has_more,
+        "max_results": limit,
+    }
+
+
+# ============================================================
+# MAP OVERVIEW
+# ============================================================
+
+@router.get("/map/summary")
+def get_map_summary(
+    db: Session = Depends(get_db),
+):
+    """Return complete map totals without transferring report content."""
+
+    total_reports = db.query(func.count(Report.id)).scalar() or 0
+    location_rows = (
+        db.query(
+            Report.city,
+            Report.district,
+            func.count(Report.id).label("count"),
+        )
+        .group_by(Report.city, Report.district)
+        .all()
+    )
+    category_rows = (
+        db.query(
+            Report.category,
+            func.count(Report.id).label("count"),
+        )
+        .group_by(Report.category)
+        .order_by(func.count(Report.id).desc())
+        .all()
+    )
+
+    cities: dict[str, dict] = {}
+
+    for raw_city, raw_district, count in location_rows:
+        city = (raw_city or "").strip() or "Bilinmeyen il"
+        district = (raw_district or "").strip() or "Bilinmeyen ilçe"
+        city_item = cities.setdefault(
+            city,
+            {
+                "city": city,
+                "count": 0,
+                "districts": {},
+            },
+        )
+        city_item["count"] += int(count)
+        city_item["districts"][district] = (
+            city_item["districts"].get(district, 0) + int(count)
+        )
+
+    city_response = []
+
+    for city_item in cities.values():
+        city_response.append(
+            {
+                "city": city_item["city"],
+                "count": city_item["count"],
+                "districts": sorted(
+                    [
+                        {
+                            "district": district,
+                            "count": count,
+                        }
+                        for district, count in city_item["districts"].items()
+                    ],
+                    key=lambda item: item["count"],
+                    reverse=True,
+                ),
+            }
+        )
+
+    city_response.sort(
+        key=lambda item: item["count"],
+        reverse=True,
+    )
+
+    return {
+        "total_reports": int(total_reports),
+        "cities": city_response,
+        "categories": [
+            {
+                "category": category or "other",
+                "count": int(count),
+            }
+            for category, count in category_rows
+        ],
+    }
 
 
 # ============================================================
@@ -385,6 +607,80 @@ def get_statistics(
     )
 
     return result
+
+
+# ============================================================
+# SCOPE STATISTICS
+# ============================================================
+
+@router.get("/statistics/scope")
+def get_scope_statistics(
+    city: str | None = None,
+    district: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return aggregate data for a report scope without loading its reports."""
+
+    query = db.query(Report)
+
+    if city:
+        query = query.filter(Report.city == city)
+
+    if district:
+        query = query.filter(Report.district == district)
+
+    summary = query.with_entities(
+        func.count(Report.id).label("total_reports"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (Report.progress == 100, 1),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("resolved_reports"),
+        func.coalesce(
+            func.avg(Report.progress),
+            0,
+        ).label("average_progress"),
+    ).one()
+
+    total_reports = int(summary.total_reports or 0)
+    resolved_reports = int(summary.resolved_reports or 0)
+
+    category_rows = (
+        query.with_entities(
+            Report.category,
+            func.count(Report.id).label("count"),
+        )
+        .group_by(Report.category)
+        .order_by(func.count(Report.id).desc())
+        .all()
+    )
+
+    return {
+        "total_reports": total_reports,
+        "resolved_reports": resolved_reports,
+        "pending_reports": total_reports - resolved_reports,
+        "average_progress": round(
+            float(summary.average_progress or 0),
+            2,
+        ),
+        "resolution_rate": round(
+            resolved_reports / total_reports * 100
+            if total_reports
+            else 0,
+            2,
+        ),
+        "categories": [
+            {
+                "category": category,
+                "count": int(count),
+            }
+            for category, count in category_rows
+        ],
+    }
 
 
 # ============================================================
@@ -728,6 +1024,8 @@ def search_suggestions(
         suggestions.append(
             {
                 "name": name,
+                "city": city,
+                "municipality": municipality,
                 "latitude": float(
                     item["lat"]
                 ),

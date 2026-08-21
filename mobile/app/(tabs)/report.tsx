@@ -32,6 +32,8 @@ import {
 } from "../../lib/api";
 
 import type { Report } from "../../types/report";
+
+import { Colors } from "../../theme/colors";
 import { AuthResponse, getAuthData } from "../../lib/auth";
 
 const isWeb = Platform.OS === "web";
@@ -1071,12 +1073,20 @@ const fillWithAI = async () => {
                   item.id
                 );
 
+              const categoryColor =
+                Colors.category[
+                  item.id as keyof typeof Colors.category
+                ] ?? Colors.category.other;
+
               return (
                 <TouchableOpacity
                   key={item.id}
                   activeOpacity={0.8}
                   style={[
                     styles.categoryCard,
+                    {
+                      backgroundColor: categoryColor,
+                    },
                     selected &&
                       styles.categoryCardSelected,
                   ]}
@@ -1084,10 +1094,6 @@ const fillWithAI = async () => {
                     toggleCategory(item.id)
                   }
                 >
-                  <Text style={styles.categoryIcon}>
-                    {item.icon}
-                  </Text>
-
                   <Text
                     style={[
                       styles.categoryText,

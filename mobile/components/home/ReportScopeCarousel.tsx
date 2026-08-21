@@ -1,7 +1,13 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import { CategoryStatistics } from "../../lib/api";
-import { Colors, HomeTokens, Typography } from "../../theme";
+import { Colors, HomeTokens, Radius, Typography } from "../../theme";
 import CategoryChart from "./CategoryChart";
 
 type ReportScopeCarouselProps = {
@@ -10,12 +16,15 @@ type ReportScopeCarouselProps = {
   onPageChange: (page: number) => void;
   totalCategories: CategoryStatistics[];
   totalReports: number;
+  totalLoading: boolean;
   city: string | null;
   cityCategories: CategoryStatistics[];
   cityReports: number;
+  cityLoading: boolean;
   municipality: string | null;
   municipalityCategories: CategoryStatistics[];
   municipalityReports: number;
+  municipalityLoading: boolean;
 };
 
 export default function ReportScopeCarousel({
@@ -24,12 +33,15 @@ export default function ReportScopeCarousel({
   onPageChange,
   totalCategories,
   totalReports,
+  totalLoading,
   city,
   cityCategories,
   cityReports,
+  cityLoading,
   municipality,
   municipalityCategories,
   municipalityReports,
+  municipalityLoading,
 }: ReportScopeCarouselProps) {
   return (
     <View style={styles.section}>
@@ -48,6 +60,7 @@ export default function ReportScopeCarousel({
           subtitle="Bildirimlerin kategorilere göre dağılımı"
           categories={totalCategories}
           total={totalReports}
+          loading={totalLoading}
         />
         <ScopePage
           width={width}
@@ -59,6 +72,7 @@ export default function ReportScopeCarousel({
           }
           categories={cityCategories}
           total={cityReports}
+          loading={cityLoading}
         />
         <ScopePage
           width={width}
@@ -74,6 +88,7 @@ export default function ReportScopeCarousel({
           }
           categories={municipalityCategories}
           total={municipalityReports}
+          loading={municipalityLoading}
         />
       </ScrollView>
 
@@ -98,16 +113,31 @@ type ScopePageProps = {
   subtitle: string;
   categories: CategoryStatistics[];
   total: number;
+  loading: boolean;
 };
 
-function ScopePage({ width, title, subtitle, categories, total }: ScopePageProps) {
+function ScopePage({
+  width,
+  title,
+  subtitle,
+  categories,
+  total,
+  loading,
+}: ScopePageProps) {
   return (
     <View style={[styles.page, { width }]}>
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
-      <CategoryChart categories={categories} total={total} />
+      {loading ? (
+        <View style={styles.loadingChart}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+          <Text style={styles.loadingText}>İstatistikler yükleniyor...</Text>
+        </View>
+      ) : (
+        <CategoryChart categories={categories} total={total} />
+      )}
     </View>
   );
 }
@@ -130,6 +160,18 @@ const styles = StyleSheet.create({
     ...Typography.label,
     color: Colors.textMuted,
     marginTop: 4,
+  },
+  loadingChart: {
+    minHeight: 250,
+    borderRadius: Radius.xxl,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    ...Typography.label,
+    color: Colors.textMuted,
+    marginTop: 10,
   },
   indicators: {
     flexDirection: "row",
