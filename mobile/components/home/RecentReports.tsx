@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
@@ -369,8 +370,20 @@ export default function RecentReports({
 
   async function toggleFollow(report: Report) {
     if (!accessToken) {
-      console.log(
-        "FOLLOW ERROR: Kullanıcı giriş yapmamış."
+      Alert.alert(
+        "Giriş Yapmalısınız",
+        "Bir sorunu takip edebilmek için giriş yapmanız veya kayıt olmanız gerekiyor.",
+        [
+          { text: "Vazgeç", style: "cancel" },
+          {
+            text: "Kayıt Ol",
+            onPress: () => router.push("/(auth)/register"),
+          },
+          {
+            text: "Giriş Yap",
+            onPress: () => router.push("/(auth)/login"),
+          },
+        ]
       );
       return;
     }

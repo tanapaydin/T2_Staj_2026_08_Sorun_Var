@@ -66,7 +66,8 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: "#475569",
+    color: "#172033",
+    fontWeight: "600",
     textAlign: "center",
     marginBottom: 32,
     maxWidth: 320,
@@ -81,8 +82,7 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     width: "100%",
-    borderWidth: 1,
-    borderColor: "#1D4ED8",
+    backgroundColor: "#BFDBFE",
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   secondaryButtonText: {
-    color: "#1D4ED8",
+    color: "#2563EB",
     fontWeight: "700",
     fontSize: 16,
   },

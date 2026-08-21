@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
@@ -13,8 +13,9 @@ import {
   View,
   Linking,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 
@@ -23,10 +24,12 @@ import {
   fetchFollowedReports,
   fetchNotificationSettings,
   updateProfile,
+  updatePassword,
   updateNotificationSettings,
+  unfollowReport,
 } from "../../lib/api";
 import { Report } from "../../types/report";
-import { statusLabels } from "../../constants/report";
+import { categoryLabels, statusLabels } from "../../constants/report";
 import {
   ensurePushPermission,
   syncPushSubscription,
@@ -52,13 +55,30 @@ export default function ProfileScreen() {
   const [followedReports, setFollowedReports] = useState<Report[]>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(true);
   const [showAllFollowed, setShowAllFollowed] = useState(false);
+  const [followedStatusFilter, setFollowedStatusFilter] = useState("all");
+  const [followedCategoryFilter, setFollowedCategoryFilter] = useState("all");
+  const [followedDateFilter, setFollowedDateFilter] = useState("all");
+  const [showFollowedFilters, setShowFollowedFilters] = useState(false);
+  const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showEmailSettings, setShowEmailSettings] = useState(false);
+  const [emailSettingsView, setEmailSettingsView] = useState<"menu" | "email" | "password">("menu");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [showAccountInfo, setShowAccountInfo] = useState(false);
+  const [draftCurrentPassword, setDraftCurrentPassword] = useState("");
+  const [draftNewPassword, setDraftNewPassword] = useState("");
+  const [draftConfirmPassword, setDraftConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
   const [draftAvatarUrl, setDraftAvatarUrl] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [settings, setSettings] = useState<ProfileSettings>({
-    push_notifications: true,
+    push_notifications: false,
     location_notifications: false,
     email_notifications: false,
   });
@@ -98,6 +118,77 @@ export default function ProfileScreen() {
       .finally(() => setCheckingAuth(false));
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      getAuthData().then((data) => {
+        if (!active || !data) return;
+
+        fetchFollowedReports(data.access_token)
+          .then((reports) => {
+            if (active) setFollowedReports(reports);
+          })
+          .catch((error) => {
+            console.log("REFRESH FOLLOWED REPORTS ERROR:", error);
+          });
+      });
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const matchesDateFilter = (report: Report, filter: string) => {
+    if (filter === "all") return true;
+
+    const reference = report.followed_at || report.created_at;
+    if (!reference) return true;
+
+    const referenceDate = new Date(reference);
+    const now = new Date();
+    const diffDays = (now.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (filter === "today") return diffDays < 1;
+    if (filter === "week") return diffDays < 7;
+    if (filter === "month") return diffDays < 30;
+
+    return true;
+  };
+
+  const handleUnfollowReport = (report: Report) => {
+    if (!auth) return;
+
+    Alert.alert(
+      "Takibi Bırak",
+      `"${report.title}" adlı sorunu takipten çıkarmak istediğinize emin misiniz?`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Takibi Bırak",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setUnfollowingId(report.id);
+              await unfollowReport(report.id, auth.access_token);
+              setFollowedReports((current) =>
+                current.filter((item) => item.id !== report.id)
+              );
+            } catch (error) {
+              Alert.alert(
+                "Takip bırakılamadı",
+                error instanceof Error ? error.message : "Lütfen tekrar deneyin."
+              );
+            } finally {
+              setUnfollowingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleLogout = async () => {
     Alert.alert(
       "Çıkış Yap",
@@ -136,7 +227,8 @@ export default function ProfileScreen() {
               await deleteAccount(auth.access_token);
               await clearAuthData();
               setAuth(null);
-              router.replace("/");
+              setFollowedReports([]);
+              router.replace("/(auth)/login");
             } catch (err) {
               console.log("DELETE ACCOUNT ERROR", err);
               Alert.alert("Hata", String(err));
@@ -240,7 +332,6 @@ export default function ProfileScreen() {
   const handleEditProfile = () => {
     if (!auth) return;
     setDraftName(auth.user.name);
-    setDraftEmail(auth.user.email);
     setDraftAvatarUrl(auth.user.avatar_url ?? null);
     setIsEditingProfile(true);
   };
@@ -278,15 +369,9 @@ export default function ProfileScreen() {
     if (!auth) return;
 
     const nextName = draftName.trim();
-    const nextEmail = draftEmail.trim();
 
     if (!nextName) {
       Alert.alert("Hata", "Ad alanı boş olamaz.");
-      return;
-    }
-
-    if (!nextEmail) {
-      Alert.alert("Hata", "E-posta alanı boş olamaz.");
       return;
     }
 
@@ -294,7 +379,6 @@ export default function ProfileScreen() {
       setSavingProfile(true);
       const updatedUser = await updateProfile(auth.access_token, {
         name: nextName,
-        email: nextEmail,
         avatar_url: draftAvatarUrl,
       });
       const updatedAuth = { ...auth, user: updatedUser };
@@ -309,6 +393,150 @@ export default function ProfileScreen() {
     } finally {
       setSavingProfile(false);
     }
+  };
+
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+  const getPasswordRequirementError = (value: string) => {
+    if (new TextEncoder().encode(value).length > 72) {
+      return "Şifre en fazla 72 byte olabilir.";
+    }
+
+    const missing: string[] = [];
+    if (!/[A-Z]/.test(value)) missing.push("büyük harf");
+    if (!/[a-z]/.test(value)) missing.push("küçük harf");
+    if (!/[0-9]/.test(value)) missing.push("rakam");
+    if (!/[^A-Za-z0-9]/.test(value)) missing.push("özel karakter");
+
+    if (missing.length > 0) {
+      return `Şifrenizde en az bir ${missing.join(", en az bir ")} bulunmalıdır.`;
+    }
+
+    return null;
+  };
+
+  const handleEditEmail = () => {
+    if (!auth) return;
+    setDraftEmail(auth.user.email);
+    setDraftCurrentPassword("");
+    setDraftNewPassword("");
+    setDraftConfirmPassword("");
+    setEmailSettingsView("menu");
+    setShowEmailSettings(true);
+  };
+
+  const closeEmailSettings = () => {
+    setShowEmailSettings(false);
+    setEmailSettingsView("menu");
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  const saveEmail = async (nextEmail: string) => {
+    if (!auth) return;
+
+    try {
+      setSavingEmail(true);
+      const updatedUser = await updateProfile(auth.access_token, {
+        email: nextEmail,
+      });
+      const updatedAuth = { ...auth, user: updatedUser };
+      await AsyncStorage.setItem("SORUN_VAR_AUTH", JSON.stringify(updatedAuth));
+      setAuth(updatedAuth);
+      setEmailSettingsView("menu");
+    } catch (error) {
+      Alert.alert(
+        "E-posta güncellenemedi",
+        error instanceof Error ? error.message : "Lütfen tekrar deneyin."
+      );
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  const handleSaveEmail = () => {
+    if (!auth) return;
+
+    const nextEmail = draftEmail.trim();
+
+    if (!nextEmail) {
+      Alert.alert("Hata", "E-posta alanı boş olamaz.");
+      return;
+    }
+
+    if (!isValidEmail(nextEmail)) {
+      Alert.alert("Hata", "Lütfen geçerli bir e-posta adresi girin.");
+      return;
+    }
+
+    if (nextEmail.toLowerCase() === auth.user.email.toLowerCase()) {
+      Alert.alert("Hata", "Yeni e-posta mevcut e-postanızla aynı.");
+      return;
+    }
+
+    Alert.alert(
+      "E-postayı Değiştir",
+      `E-posta adresinizi "${nextEmail}" olarak değiştirmek üzeresiniz. Onaylıyor musunuz?`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Onayla", onPress: () => saveEmail(nextEmail) },
+      ]
+    );
+  };
+
+  const savePassword = async (currentPassword: string, newPassword: string) => {
+    if (!auth) return;
+
+    try {
+      setSavingPassword(true);
+      await updatePassword(auth.access_token, currentPassword, newPassword);
+      setDraftCurrentPassword("");
+      setDraftNewPassword("");
+      setDraftConfirmPassword("");
+      setEmailSettingsView("menu");
+      Alert.alert("Başarılı", "Şifreniz güncellendi.");
+    } catch (error) {
+      Alert.alert(
+        "Şifre güncellenemedi",
+        error instanceof Error ? error.message : "Lütfen tekrar deneyin."
+      );
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleSavePassword = () => {
+    if (!auth) return;
+
+    const currentPassword = draftCurrentPassword.trim();
+    const newPassword = draftNewPassword.trim();
+    const confirmPassword = draftConfirmPassword.trim();
+
+    if (!currentPassword) {
+      Alert.alert("Hata", "Mevcut şifrenizi girin.");
+      return;
+    }
+
+    const passwordError = getPasswordRequirementError(newPassword);
+    if (passwordError) {
+      Alert.alert("Hata", passwordError);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Hata", "Yeni şifreler eşleşmiyor.");
+      return;
+    }
+
+    Alert.alert(
+      "Şifreyi Değiştir",
+      "Şifrenizi değiştirmek üzeresiniz. Onaylıyor musunuz?",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Onayla", onPress: () => savePassword(currentPassword, newPassword) },
+      ]
+    );
   };
 
   if (checkingAuth) {
@@ -373,83 +601,74 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {isEditingProfile && (
-            <View style={styles.editCard}>
-              <Text style={styles.sectionTitle}>Profili Güncelle</Text>
+          <Modal
+            visible={isEditingProfile}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setIsEditingProfile(false)}
+          >
+            <View style={styles.centeredModalOverlay}>
+              <View style={styles.centeredModalCard}>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={styles.sectionTitle}>Profili Güncelle</Text>
 
-              <View style={styles.photoEditRow}>
-                <View style={styles.editAvatar}>
-                  {draftAvatarUrl ? (
-                    <Image source={{ uri: draftAvatarUrl }} style={styles.editAvatarImage} />
-                  ) : (
-                    <Text style={styles.editAvatarText}>{initials}</Text>
-                  )}
-                </View>
-                <View style={styles.photoActions}>
-                  <Pressable style={styles.photoButton} onPress={openPhotoOptions}>
-                    <Text style={styles.photoButtonText}>Fotoğrafı değiştir</Text>
-                  </Pressable>
-                  {draftAvatarUrl && (
-                    <Pressable onPress={() => setDraftAvatarUrl(null)}>
-                      <Text style={styles.removePhotoText}>Fotoğrafı kaldır</Text>
+                  <View style={styles.photoEditRow}>
+                    <View style={styles.editAvatar}>
+                      {draftAvatarUrl ? (
+                        <Image source={{ uri: draftAvatarUrl }} style={styles.editAvatarImage} />
+                      ) : (
+                        <Text style={styles.editAvatarText}>{initials}</Text>
+                      )}
+                    </View>
+                    <View style={styles.photoActions}>
+                      <Pressable style={styles.photoButton} onPress={openPhotoOptions}>
+                        <Text style={styles.photoButtonText}>Fotoğrafı değiştir</Text>
+                      </Pressable>
+                      {draftAvatarUrl && (
+                        <Pressable onPress={() => setDraftAvatarUrl(null)}>
+                          <Text style={styles.removePhotoText}>Fotoğrafı kaldır</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Ad Soyad</Text>
+                  <TextInput
+                    value={draftName}
+                    onChangeText={setDraftName}
+                    style={styles.input}
+                    placeholder="Adınız"
+                    placeholderTextColor="#94A3B8"
+                  />
+
+                  <View style={styles.editActions}>
+                    <Pressable
+                      style={[styles.secondaryAction, styles.cancelAction]}
+                      onPress={() => setIsEditingProfile(false)}
+                    >
+                      <Text style={styles.secondaryActionText}>İptal</Text>
                     </Pressable>
-                  )}
-                </View>
-              </View>
 
-              <Text style={styles.inputLabel}>Ad Soyad</Text>
-              <TextInput
-                value={draftName}
-                onChangeText={setDraftName}
-                style={styles.input}
-                placeholder="Adınız"
-                placeholderTextColor="#94A3B8"
-              />
-
-              <Text style={styles.inputLabel}>E-posta</Text>
-              <TextInput
-                value={draftEmail}
-                onChangeText={setDraftEmail}
-                style={styles.input}
-                placeholder="ornek@email.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholderTextColor="#94A3B8"
-              />
-
-              <View style={styles.editActions}>
-                <Pressable
-                  style={[styles.secondaryAction, styles.cancelAction]}
-                  onPress={() => setIsEditingProfile(false)}
-                >
-                  <Text style={styles.secondaryActionText}>İptal</Text>
-                </Pressable>
-
-                <Pressable style={styles.primaryAction} onPress={handleSaveProfile} disabled={savingProfile}>
-                  {savingProfile ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kaydet</Text>}
-                </Pressable>
+                    <Pressable style={styles.primaryAction} onPress={handleSaveProfile} disabled={savingProfile}>
+                      {savingProfile ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kaydet</Text>}
+                    </Pressable>
+                  </View>
+                </ScrollView>
               </View>
             </View>
-          )}
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Rol</Text>
-            <Text style={styles.infoValue}>
-              {roleLabels[auth.user.role] || auth.user.role}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>E-posta durumu</Text>
-            <Text style={styles.infoValue}>
-              {auth.user.email_verified ? "Doğrulandı" : "Doğrulanmadı"}
-            </Text>
-          </View>
+          </Modal>
 
           <View style={styles.section}>
             <Pressable
               style={styles.followedHeader}
-              onPress={() => followedReports.length > 0 && setShowAllFollowed(true)}
+              onPress={() => {
+                if (followedReports.length === 0) return;
+                setFollowedStatusFilter("all");
+                setFollowedCategoryFilter("all");
+                setFollowedDateFilter("all");
+                setShowFollowedFilters(false);
+                setShowAllFollowed(true);
+              }}
               disabled={followedReports.length === 0}
             >
               <Text style={styles.sectionTitle}>Takip edilen problemler</Text>
@@ -513,27 +732,170 @@ export default function ProfileScreen() {
                 contentContainerStyle={styles.followedModalList}
                 showsVerticalScrollIndicator={false}
               >
-                {followedReports.map((report) => (
-                  <Pressable
-                    key={report.id}
-                    style={styles.reportCard}
-                    onPress={() => {
-                      setShowAllFollowed(false);
-                      router.push({ pathname: "/(tabs)/home" });
-                    }}
-                  >
-                    <View style={styles.reportHeader}>
-                      <Text style={styles.reportTitle} numberOfLines={1}>
-                        {report.title}
+                <Pressable
+                  style={styles.followedFilterToggle}
+                  onPress={() => setShowFollowedFilters((prev) => !prev)}
+                >
+                  <View style={styles.followedFilterToggleLeft}>
+                    <Ionicons name="filter" size={16} color="#1D4ED8" />
+                    <Text style={styles.followedFilterToggleText}>Filtrele</Text>
+                    {(followedStatusFilter !== "all" ||
+                      followedCategoryFilter !== "all" ||
+                      followedDateFilter !== "all") && (
+                      <View style={styles.followedFilterBadge}>
+                        <Text style={styles.followedFilterBadgeText}>
+                          {
+                            [followedStatusFilter, followedCategoryFilter, followedDateFilter].filter(
+                              (value) => value !== "all"
+                            ).length
+                          }
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Ionicons
+                    name={showFollowedFilters ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color="#64748B"
+                  />
+                </Pressable>
+
+                {showFollowedFilters && (
+                  <View style={styles.followedFilterPanel}>
+                    <Text style={styles.followedFilterLabel}>Durum</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.followedFilterRow}
+                      contentContainerStyle={styles.followedFilterRowContent}
+                    >
+                      {[
+                        { key: "all", label: "Tümü" },
+                        ...Object.entries(statusLabels).map(([key, label]) => ({ key, label })),
+                      ].map(({ key, label }) => (
+                        <Pressable
+                          key={key}
+                          style={[
+                            styles.followedFilterChip,
+                            followedStatusFilter === key && styles.followedFilterChipActive,
+                          ]}
+                          onPress={() => setFollowedStatusFilter(key)}
+                        >
+                          <Text
+                            style={[
+                              styles.followedFilterChipText,
+                              followedStatusFilter === key && styles.followedFilterChipTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+
+                    <Text style={styles.followedFilterLabel}>Kategori</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.followedFilterRow}
+                      contentContainerStyle={styles.followedFilterRowContent}
+                    >
+                      {[
+                        { key: "all", label: "Tümü" },
+                        ...Object.entries(categoryLabels).map(([key, label]) => ({ key, label })),
+                      ].map(({ key, label }) => (
+                        <Pressable
+                          key={key}
+                          style={[
+                            styles.followedFilterChip,
+                            followedCategoryFilter === key && styles.followedFilterChipActive,
+                          ]}
+                          onPress={() => setFollowedCategoryFilter(key)}
+                        >
+                          <Text
+                            style={[
+                              styles.followedFilterChipText,
+                              followedCategoryFilter === key && styles.followedFilterChipTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+
+                    <Text style={styles.followedFilterLabel}>Tarih</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.followedFilterRow}
+                      contentContainerStyle={styles.followedFilterRowContent}
+                    >
+                      {[
+                        { key: "all", label: "Tümü" },
+                        { key: "today", label: "Bugün" },
+                        { key: "week", label: "Bu Hafta" },
+                        { key: "month", label: "Bu Ay" },
+                      ].map(({ key, label }) => (
+                        <Pressable
+                          key={key}
+                          style={[
+                            styles.followedFilterChip,
+                            followedDateFilter === key && styles.followedFilterChipActive,
+                          ]}
+                          onPress={() => setFollowedDateFilter(key)}
+                        >
+                          <Text
+                            style={[
+                              styles.followedFilterChipText,
+                              followedDateFilter === key && styles.followedFilterChipTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {followedReports
+                  .filter((report) => followedStatusFilter === "all" || report.status === followedStatusFilter)
+                  .filter((report) => followedCategoryFilter === "all" || report.category === followedCategoryFilter)
+                  .filter((report) => matchesDateFilter(report, followedDateFilter))
+                  .map((report) => (
+                  <View key={report.id} style={styles.reportCard}>
+                    <Pressable
+                      onPress={() => {
+                        setShowAllFollowed(false);
+                        router.push({ pathname: "/(tabs)/home" });
+                      }}
+                    >
+                      <View style={styles.reportHeader}>
+                        <Text style={styles.reportTitle} numberOfLines={1}>
+                          {report.title}
+                        </Text>
+                        <Text style={styles.reportStatus}>
+                          {statusLabels[report.status] || report.status}
+                        </Text>
+                      </View>
+                      <Text style={styles.reportMeta}>
+                        {report.city || "Konum bilinmiyor"} • {report.follower_count || 0} takip
                       </Text>
-                      <Text style={styles.reportStatus}>
-                        {statusLabels[report.status] || report.status}
-                      </Text>
-                    </View>
-                    <Text style={styles.reportMeta}>
-                      {report.city || "Konum bilinmiyor"} • {report.follower_count || 0} takip
-                    </Text>
-                  </Pressable>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.unfollowButton}
+                      disabled={unfollowingId === report.id}
+                      onPress={() => handleUnfollowReport(report)}
+                    >
+                      {unfollowingId === report.id ? (
+                        <ActivityIndicator size="small" color="#DC2626" />
+                      ) : (
+                        <Text style={styles.unfollowButtonText}>Takibi Bırak</Text>
+                      )}
+                    </Pressable>
+                  </View>
                 ))}
               </ScrollView>
             </SafeAreaView>
@@ -542,49 +904,325 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ayarlar</Text>
 
-            <Text style={styles.settingGroupTitle}>Bildirimler</Text>
-            {[
-              {
-                key: "push_notifications",
-                label: "Anlık bildirimler",
-                hint: "Takip ettiğiniz sorunların durum güncellemeleri",
-              },
-              {
-                key: "location_notifications",
-                label: "Yakındaki sorunlar",
-                hint: "Konumunuza yakın yeni sorunlar için uyarılar",
-              },
-              {
-                key: "email_notifications",
-                label: "E-posta güncellemeleri",
-                hint: "Yakında kullanılabilir",
-              },
-            ].map(({ key, label, hint }) => {
-              const isEnabled = settings[key as keyof typeof settings];
-              const isEmail = key === "email_notifications";
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => setShowNotificationSettings(true)}
+            >
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingLabel}>Bildirim Ayarları</Text>
+                <Text style={styles.settingHint}>
+                  Anlık, yakınlık ve e-posta bildirim tercihlerinizi yönetin
+                </Text>
+              </View>
+            </Pressable>
 
-              return (
-                <Pressable
-                  key={key}
-                  style={styles.settingRow}
-                  onPress={() => !isEmail && toggleSetting(key as keyof typeof settings)}
-                  disabled={isEmail}
-                >
-                  <View style={styles.settingTextWrap}>
-                    <Text style={styles.settingLabel}>{label}</Text>
-                    <Text style={styles.settingHint}>{hint}</Text>
-                  </View>
-
-                  <View style={[styles.toggle, isEmail && styles.toggleDisabled, isEnabled && styles.toggleActive]}>
-                    <View
-                      style={[styles.toggleThumb, isEnabled && styles.toggleThumbActive]}
-                    />
-                  </View>
-                </Pressable>
-              );
-            })}
-
+            <Pressable style={styles.settingRow} onPress={handleEditEmail}>
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingLabel}>E-posta ve Şifre Ayarları</Text>
+                <Text style={styles.settingHint}>{auth.user.email}</Text>
+              </View>
+            </Pressable>
           </View>
+
+          <View style={styles.section}>
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => setShowAccountInfo(true)}
+            >
+              <View style={styles.settingTextWrap}>
+                <Text style={styles.settingLabel}>Hesap Bilgisi</Text>
+                <Text style={styles.settingHint}>Rol ve e-posta durumunuzu görüntüleyin</Text>
+              </View>
+            </Pressable>
+          </View>
+
+          <Modal
+            visible={showAccountInfo}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setShowAccountInfo(false)}
+          >
+            <View style={styles.centeredModalOverlay}>
+              <View style={styles.centeredModalCard}>
+                <View style={styles.followedModalHeader}>
+                  <Text style={styles.followedModalTitle}>Hesap Bilgisi</Text>
+                  <Pressable
+                    style={styles.followedCloseButton}
+                    onPress={() => setShowAccountInfo(false)}
+                  >
+                    <Text style={styles.followedCloseText}>Kapat</Text>
+                  </Pressable>
+                </View>
+
+                <ScrollView
+                  contentContainerStyle={styles.followedModalList}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Rol</Text>
+                    <Text style={styles.infoValue}>
+                      {roleLabels[auth.user.role] || auth.user.role}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>E-posta durumu</Text>
+                    <Text style={styles.infoValue}>
+                      {auth.user.email_verified ? "Doğrulandı" : "Doğrulanmadı"}
+                    </Text>
+                  </View>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={showEmailSettings}
+            animationType="fade"
+            transparent
+            onRequestClose={closeEmailSettings}
+          >
+            <View style={styles.centeredModalOverlay}>
+              <View style={styles.centeredModalCard}>
+                <View style={styles.followedModalHeader}>
+                  {emailSettingsView === "menu" ? (
+                    <Text style={styles.followedModalTitle}>E-posta ve Şifre Ayarları</Text>
+                  ) : (
+                    <Pressable
+                      style={styles.backButton}
+                      onPress={() => setEmailSettingsView("menu")}
+                    >
+                      <Ionicons name="chevron-back" size={20} color="#1D4ED8" />
+                      <Text style={styles.backButtonText}>Geri</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={styles.followedCloseButton}
+                    onPress={closeEmailSettings}
+                  >
+                    <Text style={styles.followedCloseText}>Kapat</Text>
+                  </Pressable>
+                </View>
+
+                <ScrollView
+                  contentContainerStyle={styles.followedModalList}
+                  showsVerticalScrollIndicator={false}
+                >
+                {emailSettingsView === "menu" && (
+                  <>
+                    <Pressable
+                      style={styles.settingRow}
+                      onPress={() => setEmailSettingsView("email")}
+                    >
+                      <View style={styles.settingTextWrap}>
+                        <Text style={styles.settingLabel}>E-posta Değiştir</Text>
+                        <Text style={styles.settingHint}>{auth.user.email}</Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.settingRow}
+                      onPress={() => setEmailSettingsView("password")}
+                    >
+                      <View style={styles.settingTextWrap}>
+                        <Text style={styles.settingLabel}>Şifre Değiştir</Text>
+                        <Text style={styles.settingHint}>Hesap şifrenizi güncelleyin</Text>
+                      </View>
+                    </Pressable>
+                  </>
+                )}
+
+                {emailSettingsView === "email" && (
+                  <>
+                    <Text style={styles.settingGroupTitle}>E-posta</Text>
+                    <Text style={styles.inputLabel}>E-posta</Text>
+                    <TextInput
+                      value={draftEmail}
+                      onChangeText={setDraftEmail}
+                      style={styles.input}
+                      placeholder="ornek@email.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      placeholderTextColor="#94A3B8"
+                    />
+
+                    <View style={styles.editActions}>
+                      <Pressable
+                        style={[styles.secondaryAction, styles.cancelAction]}
+                        onPress={() => {
+                          setDraftEmail(auth.user.email);
+                          setEmailSettingsView("menu");
+                        }}
+                      >
+                        <Text style={styles.secondaryActionText}>İptal</Text>
+                      </Pressable>
+
+                      <Pressable style={styles.primaryAction} onPress={handleSaveEmail} disabled={savingEmail}>
+                        {savingEmail ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kaydet</Text>}
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+
+                {emailSettingsView === "password" && (
+                  <>
+                    <Text style={styles.settingGroupTitle}>Şifre</Text>
+                    <Text style={styles.inputLabel}>Mevcut Şifre</Text>
+                    <View style={styles.passwordContainer}>
+                      <TextInput
+                        value={draftCurrentPassword}
+                        onChangeText={setDraftCurrentPassword}
+                        style={[styles.input, styles.passwordInput]}
+                        placeholder="Mevcut şifreniz"
+                        secureTextEntry={!showCurrentPassword}
+                        autoCapitalize="none"
+                        placeholderTextColor="#94A3B8"
+                      />
+                      <Pressable
+                        accessibilityLabel={showCurrentPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+                        style={styles.toggleButton}
+                        onPress={() => setShowCurrentPassword((prev) => !prev)}
+                      >
+                        <Ionicons
+                          name={showCurrentPassword ? "eye-off" : "eye"}
+                          size={20}
+                          color="#64748B"
+                        />
+                      </Pressable>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Yeni Şifre</Text>
+                    <View style={styles.passwordContainer}>
+                      <TextInput
+                        value={draftNewPassword}
+                        onChangeText={setDraftNewPassword}
+                        style={[styles.input, styles.passwordInput]}
+                        placeholder="Yeni şifreniz"
+                        secureTextEntry={!showNewPassword}
+                        autoCapitalize="none"
+                        placeholderTextColor="#94A3B8"
+                      />
+                      <Pressable
+                        accessibilityLabel={showNewPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+                        style={styles.toggleButton}
+                        onPress={() => setShowNewPassword((prev) => !prev)}
+                      >
+                        <Ionicons
+                          name={showNewPassword ? "eye-off" : "eye"}
+                          size={20}
+                          color="#64748B"
+                        />
+                      </Pressable>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Yeni Şifre (Tekrar)</Text>
+                    <View style={styles.passwordContainer}>
+                      <TextInput
+                        value={draftConfirmPassword}
+                        onChangeText={setDraftConfirmPassword}
+                        style={[styles.input, styles.passwordInput]}
+                        placeholder="Yeni şifrenizi tekrar girin"
+                        secureTextEntry={!showConfirmPassword}
+                        autoCapitalize="none"
+                        placeholderTextColor="#94A3B8"
+                      />
+                      <Pressable
+                        accessibilityLabel={showConfirmPassword ? "Şifreyi gizle" : "Şifreyi göster"}
+                        style={styles.toggleButton}
+                        onPress={() => setShowConfirmPassword((prev) => !prev)}
+                      >
+                        <Ionicons
+                          name={showConfirmPassword ? "eye-off" : "eye"}
+                          size={20}
+                          color="#64748B"
+                        />
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.editActions}>
+                      <Pressable
+                        style={[styles.secondaryAction, styles.cancelAction]}
+                        onPress={() => {
+                          setDraftCurrentPassword("");
+                          setDraftNewPassword("");
+                          setDraftConfirmPassword("");
+                          setEmailSettingsView("menu");
+                        }}
+                      >
+                        <Text style={styles.secondaryActionText}>İptal</Text>
+                      </Pressable>
+
+                      <Pressable style={styles.primaryAction} onPress={handleSavePassword} disabled={savingPassword}>
+                        {savingPassword ? <ActivityIndicator color="white" /> : <Text style={styles.primaryActionText}>Kaydet</Text>}
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={showNotificationSettings}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setShowNotificationSettings(false)}
+          >
+            <View style={styles.centeredModalOverlay}>
+              <View style={styles.centeredModalCard}>
+                <View style={styles.followedModalHeader}>
+                  <Text style={styles.followedModalTitle}>Bildirim Ayarları</Text>
+                  <Pressable
+                    style={styles.followedCloseButton}
+                    onPress={() => setShowNotificationSettings(false)}
+                  >
+                    <Text style={styles.followedCloseText}>Kapat</Text>
+                  </Pressable>
+                </View>
+
+                <ScrollView
+                  contentContainerStyle={styles.followedModalList}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.settingGroupTitle}>Bildirimler</Text>
+                  {[
+                    {
+                      key: "push_notifications",
+                      label: "Anlık bildirimler",
+                      hint: "Takip ettiğiniz sorunların durum güncellemeleri",
+                    },
+                    {
+                      key: "location_notifications",
+                      label: "Yakındaki sorunlar",
+                      hint: "Konumunuza yakın yeni sorunlar için uyarılar",
+                    },
+                  ].map(({ key, label, hint }) => {
+                    const isEnabled = settings[key as keyof typeof settings];
+
+                    return (
+                      <Pressable
+                        key={key}
+                        style={styles.settingRow}
+                        onPress={() => toggleSetting(key as keyof typeof settings)}
+                      >
+                        <View style={styles.settingTextWrap}>
+                          <Text style={styles.settingLabel}>{label}</Text>
+                          <Text style={styles.settingHint}>{hint}</Text>
+                        </View>
+
+                        <View style={[styles.toggle, isEnabled && styles.toggleActive]}>
+                          <View
+                            style={[styles.toggleThumb, isEnabled && styles.toggleThumbActive]}
+                          />
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           <Pressable
             style={styles.logoutButton}
@@ -857,6 +1495,21 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
   },
+  centeredModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  centeredModalCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 20,
+    padding: 20,
+    width: "100%",
+    maxWidth: 440,
+    maxHeight: "80%",
+  },
   followedModalHeader: {
     alignItems: "center",
     flexDirection: "row",
@@ -881,8 +1534,119 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
+  backButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    flex: 1,
+  },
+  backButtonText: {
+    color: "#1D4ED8",
+    fontSize: 15,
+    fontWeight: "700",
+    marginLeft: 2,
+  },
+  passwordContainer: {
+    justifyContent: "center",
+    marginBottom: 0,
+    width: "100%",
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  toggleButton: {
+    alignItems: "center",
+    height: 44,
+    justifyContent: "center",
+    position: "absolute",
+    right: 4,
+    width: 40,
+  },
   followedModalList: {
     paddingBottom: 24,
+  },
+  followedFilterToggle: {
+    alignItems: "center",
+    backgroundColor: "white",
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  followedFilterToggleLeft: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  followedFilterToggleText: {
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  followedFilterBadge: {
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+    borderRadius: 999,
+    justifyContent: "center",
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  followedFilterBadgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  followedFilterPanel: {
+    marginBottom: 4,
+  },
+  followedFilterLabel: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+  followedFilterRow: {
+    marginBottom: 14,
+  },
+  followedFilterRowContent: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  followedFilterChip: {
+    backgroundColor: "white",
+    borderColor: "#E2E8F0",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  followedFilterChipActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+  followedFilterChipText: {
+    color: "#475569",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  followedFilterChipTextActive: {
+    color: "white",
+  },
+  unfollowButton: {
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    borderRadius: 10,
+    marginTop: 10,
+    paddingVertical: 10,
+  },
+  unfollowButtonText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "700",
   },
   settingGroupTitle: {
     color: "#2563EB",

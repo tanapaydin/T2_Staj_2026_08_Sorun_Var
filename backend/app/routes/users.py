@@ -9,15 +9,18 @@ from app.models import (
     Comment,
     ReportFollow,
     ReportStatusHistory,
+    ReportImage,
     PushSubscription,
 )
 from app.schemas import (
     NotificationSettingsResponse,
     NotificationSettingsUpdate,
+    PasswordUpdate,
     ProfileUpdate,
     PushTokenRegister,
     UserResponse,
 )
+from app.utils.security import hash_password, verify_password
 
 router = APIRouter(
     prefix="/users",
@@ -63,6 +66,20 @@ def update_profile(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def update_password(
+    payload: PasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Mevcut şifre yanlış.")
+
+    current_user.password_hash = hash_password(payload.new_password)
+    db.add(current_user)
+    db.commit()
 
 
 @router.get("/me/notifications", response_model=NotificationSettingsResponse)
@@ -187,7 +204,37 @@ def delete_me(
 ):
     # Remove reports created by the user (Report cascade will remove images, comments, history)
     try:
-        db.query(Report).filter(Report.user_id == current_user.id).delete(synchronize_session=False)
+        owned_report_ids = [
+            report_id
+            for (report_id,) in db.query(Report.id)
+            .filter(Report.user_id == current_user.id)
+            .all()
+        ]
+
+        db.query(PushSubscription).filter(
+            PushSubscription.user_id == current_user.id
+        ).delete(synchronize_session=False)
+
+        db.query(ReportFollow).filter(
+            ReportFollow.user_id == current_user.id
+        ).delete(synchronize_session=False)
+
+        if owned_report_ids:
+            db.query(ReportFollow).filter(
+                ReportFollow.report_id.in_(owned_report_ids)
+            ).delete(synchronize_session=False)
+            db.query(ReportImage).filter(
+                ReportImage.report_id.in_(owned_report_ids)
+            ).delete(synchronize_session=False)
+            db.query(Comment).filter(
+                Comment.report_id.in_(owned_report_ids)
+            ).delete(synchronize_session=False)
+            db.query(ReportStatusHistory).filter(
+                ReportStatusHistory.report_id.in_(owned_report_ids)
+            ).delete(synchronize_session=False)
+            db.query(Report).filter(
+                Report.id.in_(owned_report_ids)
+            ).delete(synchronize_session=False)
 
         # Remove comments authored by the user on other reports
         db.query(Comment).filter(Comment.user_id == current_user.id).delete(synchronize_session=False)
