@@ -15,10 +15,12 @@ from app.models import (
 from app.schemas import (
     NotificationSettingsResponse,
     NotificationSettingsUpdate,
+    PasswordUpdate,
     ProfileUpdate,
     PushTokenRegister,
     UserResponse,
 )
+from app.utils.security import hash_password, verify_password
 
 router = APIRouter(
     prefix="/users",
@@ -64,6 +66,20 @@ def update_profile(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.patch("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def update_password(
+    payload: PasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Mevcut şifre yanlış.")
+
+    current_user.password_hash = hash_password(payload.new_password)
+    db.add(current_user)
+    db.commit()
 
 
 @router.get("/me/notifications", response_model=NotificationSettingsResponse)

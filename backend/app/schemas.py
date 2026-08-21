@@ -6,6 +6,25 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, validator
 
 
+def validate_password_strength(value: str) -> str:
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("Şifre en fazla 72 byte olabilir.")
+
+    requirements = {
+        "büyük harf": re.search(r"[A-Z]", value),
+        "küçük harf": re.search(r"[a-z]", value),
+        "rakam": re.search(r"[0-9]", value),
+        "özel karakter": re.search(r"[^A-Za-z0-9]", value),
+    }
+    missing = [label for label, match in requirements.items() if not match]
+    if missing:
+        raise ValueError(
+            f"Şifrenizde en az bir {', en az bir '.join(missing)} bulunmalıdır."
+        )
+
+    return value
+
+
 # ---------- AUTH ----------
 
 class UserRegister(BaseModel):
@@ -15,22 +34,7 @@ class UserRegister(BaseModel):
 
     @validator("password")
     def password_requirements(cls, value: str) -> str:
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Şifre en fazla 72 byte olabilir.")
-
-        requirements = {
-            "büyük harf": re.search(r"[A-Z]", value),
-            "küçük harf": re.search(r"[a-z]", value),
-            "rakam": re.search(r"[0-9]", value),
-            "özel karakter": re.search(r"[^A-Za-z0-9]", value),
-        }
-        missing = [label for label, match in requirements.items() if not match]
-        if missing:
-            raise ValueError(
-                f"Şifrenizde en az bir {', en az bir '.join(missing)} bulunmalıdır."
-            )
-
-        return value
+        return validate_password_strength(value)
 
 
 class UserLogin(BaseModel):
@@ -42,6 +46,16 @@ class ProfileUpdate(BaseModel):
     name: str | None = None
     email: EmailStr | None = None
     avatar_url: str | None = None
+
+
+class PasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
+    @validator("new_password")
+    def password_requirements(cls, value: str) -> str:
+        return validate_password_strength(value)
+
 
 
 class UserResponse(BaseModel):

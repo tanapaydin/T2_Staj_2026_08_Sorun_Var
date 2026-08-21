@@ -177,6 +177,28 @@ export async function updateProfile(
   return response.json();
 }
 
+export async function updatePassword(
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const response = await fetch(`${API_CONFIG.BASE_URL}/users/me/password`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+}
+
 export async function updateNotificationSettings(
   accessToken: string,
   settings: Partial<NotificationSettings>

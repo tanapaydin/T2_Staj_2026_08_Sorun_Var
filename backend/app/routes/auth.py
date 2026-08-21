@@ -46,10 +46,17 @@ def register(user_create: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login", response_model=AuthResponse)
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == user_credentials.email.lower()).first()
-    if not user or not verify_password(user_credentials.password, user.password_hash):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-posta veya şifre yanlış.",
+            detail="Bu e-posta adresine kayıtlı bir hesap bulunamadı.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not verify_password(user_credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Şifre yanlış.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

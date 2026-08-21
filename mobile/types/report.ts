@@ -19,4 +19,5 @@ export type Report = {
   view_count: number;
   follower_count: number;
   created_at: string;
+  followed_at?: string | null;
 };
