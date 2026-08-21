@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 
 const envBase = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-const defaultWeb = "http://localhost:8000";
+const defaultWeb = "http://172.20.10.4:8000";
 const defaultAndroid = "http://10.0.2.2:8000";
 const defaultNativeFallback = "http://127.0.0.1:8000";
 
