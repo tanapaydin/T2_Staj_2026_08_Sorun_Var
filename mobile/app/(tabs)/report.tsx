@@ -328,26 +328,19 @@ const openReport = async () => {
   };
 
   const removePhoto = (index: number) => {
-    const updatedPhotos = photos.filter(
-      (_, i) => i !== index
+  const updatedPhotos = photos.filter(
+    (_, i) => i !== index
+  );
+
+  setPhotos(updatedPhotos);
+
+  if (updatedPhotos.length === 0) {
+    Alert.alert(
+      "Fotoğraf Gerekli",
+      "Devam etmek için en az bir fotoğraf eklemelisin."
     );
-
-    setPhotos(updatedPhotos);
-
-    /*
-     * Son fotoğraf silindiyse
-     * rapor ekranının başlangıcına dön.
-     */
-    if (updatedPhotos.length === 0) {
-      setDescription("");
-      setCategoriesSelected([]);
-      setLocation(null);
-      setOriginalLocation(null);
-      setSelectedMapLocation(null);
-      setPreviewUri(null);
-      setCameraOpen(false);
-    }
-  };
+  }
+};
 
   const addPhoto = async () => {
     if (photos.length >= MAX_PHOTOS) {
