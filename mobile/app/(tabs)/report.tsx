@@ -52,6 +52,7 @@ if (!isWeb) {
 type UserLocation = {
   latitude: number;
   longitude: number;
+  address?: string;
 };
 
 type Category = {
@@ -231,10 +232,43 @@ export default function ReportScreen() {
 
         return;
       }
+let address = "Adres bulunamadı";
 
-      setLocation(currentLocation);
-      setOriginalLocation(currentLocation);
-      setLoadingLocation(false);
+try {
+  const addresses = await Location.reverseGeocodeAsync({
+    latitude: currentLocation.latitude,
+    longitude: currentLocation.longitude,
+  });
+
+  if (addresses.length > 0) {
+    const a = addresses[0];
+
+    address = [
+      a.name,
+      a.street,
+      a.district,
+      a.subregion,
+      a.city,
+    ]
+      .filter(Boolean)
+      .filter(
+        (value, index, array) =>
+          array.indexOf(value) === index
+      )
+      .join(", ");
+  }
+} catch (error) {
+  console.log("Adres alınamadı:", error);
+}
+
+const locationWithAddress = {
+  ...currentLocation,
+  address,
+};
+
+setLocation(locationWithAddress);
+setOriginalLocation(locationWithAddress);
+setLoadingLocation(false);
     } catch (error) {
       setLoadingLocation(false);
 
@@ -410,7 +444,7 @@ const openReport = async () => {
     setSelectedMapLocation(pressedLocation);
   };
 
-  const confirmMapLocation = () => {
+  const confirmMapLocation = async () => {
     if (!selectedMapLocation) {
       Alert.alert(
         "Konum Seçilmedi",
@@ -420,8 +454,35 @@ const openReport = async () => {
       return;
     }
 
-    setLocation(selectedMapLocation);
-    setMapOpen(false);
+const address =
+  await Location.reverseGeocodeAsync({
+    latitude: selectedMapLocation.latitude,
+    longitude: selectedMapLocation.longitude,
+  });
+
+const formattedAddress =
+  address.length > 0
+    ? [
+        address[0].name,
+        address[0].street,
+        address[0].district,
+        address[0].subregion,
+        address[0].city,
+      ]
+        .filter(Boolean)
+        .filter(
+          (value, index, array) =>
+            array.indexOf(value) === index
+        )
+        .join(", ")
+    : "Adres bulunamadı";
+
+setLocation({
+  ...selectedMapLocation,
+  address: formattedAddress,
+});
+
+setMapOpen(false);
   };
 
   const resetToCurrentLocation = () => {
@@ -1066,7 +1127,10 @@ const fillWithAI = async () => {
                 Colors.category[
                   item.id as keyof typeof Colors.category
                 ] ?? Colors.category.other;
-
+const categoryBackground =
+  selected
+    ? categoryColor
+    : `${categoryColor}2B`;
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -1074,7 +1138,7 @@ const fillWithAI = async () => {
                   style={[
                     styles.categoryCard,
                     {
-                      backgroundColor: categoryColor,
+                      backgroundColor: categoryBackground,
                     },
                     selected &&
                       styles.categoryCardSelected,
@@ -1150,76 +1214,78 @@ const fillWithAI = async () => {
           </Text>
 
           <View style={styles.locationCard}>
-            <Text style={styles.locationIcon}>
-              📍
-            </Text>
-
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationTitle}>
-                {loadingLocation
-                  ? "Konum alınıyor..."
-                  : location
-                  ? "Konum Alındı"
-                  : "Konum alınamadı"}
+            <View style={styles.locationTop}>
+              <Text style={styles.locationIcon}>
+                📍
               </Text>
 
-              {location && (
-                <Text style={styles.coordinates}>
-                  {location.latitude.toFixed(6)},{" "}
-                  {location.longitude.toFixed(6)}
+              <View style={styles.locationInfo}>
+                <Text style={styles.locationTitle}>
+                  {loadingLocation
+                    ? "Konum alınıyor..."
+                    : location
+                    ? "Mevcut Konum"
+                    : "Konum alınamadı"}
                 </Text>
-              )}
-            </View>
-          </View>
 
-          <TouchableOpacity
-            style={styles.changeLocationButton}
-            onPress={() => {
-              if (!originalLocation) {
-                Alert.alert(
-                  "Konum Bekleniyor",
-                  "Önce mevcut konumunun alınmasını bekle."
+                {location && (
+                  <Text style={styles.addressText}>
+                    {location.address || "Adres bulunamadı"}
+                  </Text>
+                )}
+
+                {location && (
+                  <View style={styles.locationStatus}>
+                    <Text style={styles.locationStatusIcon}>
+                      ✓
+                    </Text>
+
+                    <Text style={styles.locationStatusText}>
+                      Konum alındı
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.locationDivider} />
+
+            <TouchableOpacity
+              style={styles.changeLocationButton}
+              onPress={() => {
+                if (!originalLocation) {
+                  Alert.alert(
+                    "Konum Bekleniyor",
+                    "Önce mevcut konumunun alınmasını bekle."
+                  );
+                  return;
+                }
+
+                setSelectedMapLocation(
+                  location &&
+                    location !== originalLocation
+                    ? location
+                    : null
                 );
 
-                return;
-              }
+                setMapOpen(true);
+              }}
+            >
+              <View style={styles.changeLocationLeft}>
+                <Text style={styles.changeLocationIcon}>
+                  🗺️
+                </Text>
 
-              setSelectedMapLocation(
-                location &&
-                  location !== originalLocation
-                  ? location
-                  : null
-              );
+                <Text style={styles.changeLocationTitle}>
+                  Konumu Değiştir
+                </Text>
+              </View>
 
-              setMapOpen(true);
-            }}
-          >
-            <Text style={styles.changeLocationIcon}>
-              🗺️
-            </Text>
-
-            <View style={{ flex: 1 }}>
-              <Text
-                style={
-                  styles.changeLocationTitle
-                }
-              >
-                Konumu Değiştir
+              <Text style={styles.changeLocationSubtitle}>
+                En fazla 500 metre yakınından
               </Text>
-
-              <Text
-                style={
-                  styles.changeLocationSubtitle
-                }
-              >
-                En fazla 500 metre yakınından seçebilirsin.
-              </Text>
-            </View>
-
-            <Text style={styles.locationArrow}>
-              ›
-            </Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
           {location &&
             originalLocation &&
@@ -1231,9 +1297,7 @@ const fillWithAI = async () => {
                 style={styles.resetLocationButton}
                 onPress={resetToCurrentLocation}
               >
-                <Text
-                  style={styles.resetLocationText}
-                >
+                <Text style={styles.resetLocationText}>
                   Mevcut konuma geri dön
                 </Text>
               </TouchableOpacity>
@@ -1815,7 +1879,7 @@ const styles = StyleSheet.create({
 
   categoryCardSelected: {
     borderColor: "#315EE8",
-    backgroundColor: "#EEF3FF",
+   
     borderWidth: 2,
   },
 
@@ -1861,16 +1925,24 @@ const styles = StyleSheet.create({
   },
 
   aiButton: {
-    backgroundColor: "#315EE8",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    marginTop: 20,
+     width: "100%",
+
+  height: 56,
+
+  borderRadius: 16,
+
+  backgroundColor: "#315EE8",
+
+  justifyContent: "center",
+
+  alignItems: "center",
+
+  marginTop: 20,
   },
 
   aiButtonText: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
     textAlign: "center",
   },
@@ -1895,13 +1967,18 @@ const styles = StyleSheet.create({
 
   locationCard: {
     marginTop: 12,
+    width: "100%",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
     borderWidth: 1,
     borderColor: "#E0E4EA",
+  },
+
+  locationTop: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
 
   locationIcon: {
@@ -1910,6 +1987,7 @@ const styles = StyleSheet.create({
 
   locationInfo: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
   },
 
@@ -1925,32 +2003,51 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  changeLocationButton: {
-    marginTop: 10,
-    backgroundColor: "#FFFFFF",
+changeLocationButton: {
+    width: "100%",
+    height: 58,
+    marginTop: 12,
     borderRadius: 16,
-    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#315EE8",
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#315EE8",
+  },
+
+  changeLocationLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
   },
 
   changeLocationIcon: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: 21,
+    width: 28,
+    textAlign: "center",
+    marginRight: 7,
   },
 
   changeLocationTitle: {
+    color: "#315EE8",
     fontSize: 15,
     fontWeight: "700",
-    color: "#315EE8",
+    flexShrink: 1,
   },
 
   changeLocationSubtitle: {
-    fontSize: 12,
     color: "#7B8494",
-    marginTop: 3,
+    fontSize: 12,
+    marginLeft: 10,
+    flex: 1,
+    textAlign: "right",
+  },
+
+  locationDivider: {
+    height: 1,
+    backgroundColor: "#E8EBF0",
+    width: "100%",
+    marginTop: 14,
   },
 
   locationArrow: {
@@ -1971,12 +2068,19 @@ const styles = StyleSheet.create({
   },
 
   submitButton: {
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: "#315EE8",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 30,
+   width: "100%",
+
+  height: 56,
+
+  borderRadius: 16,
+
+  backgroundColor: "#315EE8",
+
+  justifyContent: "center",
+
+  alignItems: "center",
+
+  marginTop: 30,
   },
 
   disabledButton: {
@@ -1985,8 +2089,12 @@ const styles = StyleSheet.create({
 
   submitText: {
     color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "800",
+
+  fontSize: 17,
+
+  fontWeight: "800",
+
+  textAlign: "center",
   },
 
   oldReportsContainer: {
@@ -2151,7 +2259,39 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+addressText: {
+    color: "#687386",
+    fontSize: 15,
+    fontWeight: "500",
+    lineHeight: 21,
+    marginTop: 5,
+    flexShrink: 1,
+  },
 
+  locationStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+
+  locationStatusIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#E8F6EC",
+    color: "#4CAF65",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  locationStatusText: {
+    color: "#4CAF65",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
   mapDistance: {
     fontSize: 13,
     color: "#7B8494",
