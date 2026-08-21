@@ -74,7 +74,15 @@ export async function syncPushSubscription(
     });
   }
 
-  const pushToken = (await Notifications.getExpoPushTokenAsync()).data;
+  let pushToken: string;
+  try {
+    pushToken = (await Notifications.getExpoPushTokenAsync()).data;
+  } catch (error) {
+    // Remote push registration needs an EAS project id; local settings still save without it.
+    console.log("EXPO PUSH TOKEN UNAVAILABLE:", error);
+    return;
+  }
+
   await registerPushToken(accessToken, pushToken, latitude, longitude);
   await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
 }

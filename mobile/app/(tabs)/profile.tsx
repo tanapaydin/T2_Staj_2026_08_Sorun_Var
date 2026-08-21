@@ -78,7 +78,7 @@ export default function ProfileScreen() {
   const [draftAvatarUrl, setDraftAvatarUrl] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [settings, setSettings] = useState<ProfileSettings>({
-    push_notifications: true,
+    push_notifications: false,
     location_notifications: false,
     email_notifications: false,
   });
@@ -1197,28 +1197,21 @@ export default function ProfileScreen() {
                       label: "Yakındaki sorunlar",
                       hint: "Konumunuza yakın yeni sorunlar için uyarılar",
                     },
-                    {
-                      key: "email_notifications",
-                      label: "E-posta güncellemeleri",
-                      hint: "Yakında kullanılabilir",
-                    },
                   ].map(({ key, label, hint }) => {
                     const isEnabled = settings[key as keyof typeof settings];
-                    const isEmail = key === "email_notifications";
 
                     return (
                       <Pressable
                         key={key}
                         style={styles.settingRow}
-                        onPress={() => !isEmail && toggleSetting(key as keyof typeof settings)}
-                        disabled={isEmail}
+                        onPress={() => toggleSetting(key as keyof typeof settings)}
                       >
                         <View style={styles.settingTextWrap}>
                           <Text style={styles.settingLabel}>{label}</Text>
                           <Text style={styles.settingHint}>{hint}</Text>
                         </View>
 
-                        <View style={[styles.toggle, isEmail && styles.toggleDisabled, isEnabled && styles.toggleActive]}>
+                        <View style={[styles.toggle, isEnabled && styles.toggleActive]}>
                           <View
                             style={[styles.toggleThumb, isEnabled && styles.toggleThumbActive]}
                           />

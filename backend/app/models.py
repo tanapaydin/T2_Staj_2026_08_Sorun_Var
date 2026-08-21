@@ -26,7 +26,7 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     role = Column(String, default="citizen")
     email_verified = Column(Boolean, default=False)
-    push_notifications = Column(Boolean, default=True, nullable=False)
+    push_notifications = Column(Boolean, default=False, nullable=False)
     location_notifications = Column(Boolean, default=False, nullable=False)
     email_notifications = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
