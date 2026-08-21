@@ -398,6 +398,9 @@ const styles =
       maxHeight: "70%",
 
       padding: 16,
+
+      zIndex: 50,
+      elevation: 20,
     },
 
     header: {

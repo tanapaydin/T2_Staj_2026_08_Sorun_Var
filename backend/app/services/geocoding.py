@@ -65,6 +65,7 @@ def is_region(
 def get_location_details(
     latitude: float,
     longitude: float,
+    verbose: bool = True,
 ) -> dict[str, str | None]:
 
     if not GEOAPIFY_API_KEY:
@@ -95,10 +96,11 @@ def get_location_details(
     )
 
     if not results:
-        print(
-            "GEOAPIFY EMPTY RESPONSE:",
-            data,
-        )
+        if verbose:
+            print(
+                "GEOAPIFY EMPTY RESPONSE:",
+                data,
+            )
 
         return {
             "city": None,
@@ -115,10 +117,11 @@ def get_location_details(
         first_result,
     )
 
-    print(
-        "GEOAPIFY PROPERTIES:",
-        properties,
-    )
+    if verbose:
+        print(
+            "GEOAPIFY PROPERTIES:",
+            properties,
+        )
 
     # =========================================================
     # HAM ALANLAR
@@ -339,9 +342,10 @@ def get_location_details(
         "address": address,
     }
 
-    print(
-        "NORMALIZED LOCATION:",
-        result,
-    )
+    if verbose:
+        print(
+            "NORMALIZED LOCATION:",
+            result,
+        )
 
     return result

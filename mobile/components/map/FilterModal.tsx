@@ -17,14 +17,6 @@ type Props = {
   visible: boolean;
   onClose: () => void;
 
-  cityFilterMode:
-    | "current"
-    | "all"
-    | "search";
-
-  onShowCurrentCity: () => void;
-  onShowAllCities: () => void;
-
   categoryFilter: string;
   setCategoryFilter: (value: string) => void;
 
@@ -69,10 +61,6 @@ export default function FilterModal({
   visible,
   onClose,
 
-  cityFilterMode,
-  onShowCurrentCity,
-  onShowAllCities,
-
   categoryFilter,
   setCategoryFilter,
 
@@ -103,30 +91,6 @@ export default function FilterModal({
           >
             Filtreler
           </AppText>
-
-          {/* Şehir */}
-          <AppText
-            variant="heading"
-            style={styles.filterSection}
-          >
-            Şehir
-          </AppText>
-
-          <View style={styles.filterRow}>
-            <AppChip
-              label="Kendi şehrim"
-              selected={
-                cityFilterMode === "current"
-              }
-              onPress={onShowCurrentCity}
-            />
-
-            <AppChip
-              label="Tüm şehirler"
-              selected={cityFilterMode === "all"}
-              onPress={onShowAllCities}
-            />
-          </View>
 
           {/* Kategori */}
           <AppText

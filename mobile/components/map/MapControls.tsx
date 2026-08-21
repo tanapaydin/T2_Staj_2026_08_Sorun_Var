@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { Colors, Layout, MapTokens, Radius, Shadows, Spacing, Typography } from "../../theme";
 import { AppButton, AppText } from "../common";
@@ -6,32 +7,50 @@ import { AppButton, AppText } from "../common";
 type MapControlsProps = {
   showSearchAreaButton: boolean;
   onShowSearchArea: () => void;
-  isSearchMode: boolean;
-  onShowCurrentCity: () => void;
+  searchAreaDisabled: boolean;
+  searchAreaLoading: boolean;
   onOpenFilters: () => void;
+  onOpenSummary: () => void;
 };
 
 export default function MapControls({
   showSearchAreaButton,
   onShowSearchArea,
-  isSearchMode,
-  onShowCurrentCity,
+  searchAreaDisabled,
+  searchAreaLoading,
   onOpenFilters,
+  onOpenSummary,
 }: MapControlsProps) {
   return (
     <>
       {showSearchAreaButton && (
-        <View style={styles.searchAreaContainer}>
-          <Pressable onPress={onShowSearchArea} style={styles.searchAreaButton}>
-            <AppText variant="bodyMedium" color={Colors.textInverse} style={styles.searchAreaText}>
-              Bu bölgede ara
+        <View style={styles.searchAreaContainer} pointerEvents="box-none">
+          <Pressable
+            disabled={searchAreaDisabled || searchAreaLoading}
+            onPress={onShowSearchArea}
+            style={[
+              styles.searchAreaButton,
+              (searchAreaDisabled || searchAreaLoading) &&
+                styles.searchAreaButtonDisabled,
+            ]}
+          >
+            <AppText
+              variant="bodyMedium"
+              color={Colors.textInverse}
+              style={styles.searchAreaText}
+            >
+              {searchAreaLoading
+                ? "Aranıyor..."
+                : searchAreaDisabled
+                ? "Aramak için yakınlaşın"
+                : "Bu bölgede ara"}
             </AppText>
           </Pressable>
         </View>
       )}
 
-      <View style={styles.filterBar}>
-        <View style={styles.filterRow}>
+      <View style={styles.filterBar} pointerEvents="box-none">
+        <View style={styles.controlColumn}>
           <AppButton
             title="Filtre"
             variant="secondary"
@@ -39,16 +58,18 @@ export default function MapControls({
             style={styles.filterButton}
           />
 
-          {isSearchMode && (
-            <Pressable onPress={onShowCurrentCity} style={styles.searchModeButton}>
-              <AppText variant="bodyMedium" color={Colors.textSecondary} style={styles.searchModeText}>
-                Bölgede arama
-              </AppText>
-              <AppText variant="bodyMedium" color={Colors.textSecondary} style={styles.searchModeClose}>
-                ×
-              </AppText>
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Harita genel özetini aç"
+            onPress={onOpenSummary}
+            style={styles.summaryButton}
+          >
+            <Ionicons
+              name="stats-chart"
+              size={19}
+              color={Colors.primary}
+            />
+          </Pressable>
         </View>
       </View>
     </>
@@ -75,6 +96,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...Shadows.md,
   },
+  searchAreaButtonDisabled: {
+    backgroundColor: Colors.textMuted,
+    opacity: 0.9,
+  },
   searchAreaText: {
     ...Typography.meta,
     fontWeight: "800",
@@ -83,34 +108,26 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: Layout.mapFilterTop,
     left: Layout.mapSideInset,
-    right: Layout.mapSideInset,
+    width: 96,
     zIndex: 18,
   },
-  filterRow: {
-    flexDirection: "row",
+  controlColumn: {
     alignItems: "center",
+    alignSelf: "flex-start",
   },
   filterButton: {
     alignSelf: "flex-start",
   },
-  searchModeButton: {
-    marginLeft: Spacing.sm,
-    height: MapTokens.searchModeHeight,
-    paddingLeft: MapTokens.searchModePaddingLeft,
-    paddingRight: MapTokens.searchModePaddingRight,
-    borderRadius: Radius.xl,
+  summaryButton: {
+    width: 40,
+    height: 40,
+    marginTop: Spacing.sm,
+    borderRadius: Radius.full,
     backgroundColor: Colors.overlayLight,
     borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: "row",
+    borderColor: Colors.primary,
     alignItems: "center",
-  },
-  searchModeText: {
-    ...Typography.label,
-  },
-  searchModeClose: {
-    marginLeft: Spacing.sm,
-    fontSize: Typography.heading.fontSize,
-    lineHeight: 20,
+    justifyContent: "center",
+    ...Shadows.md,
   },
 });

@@ -30,8 +30,44 @@ export type CreateReportInput = {
 
 export type LocationSuggestion = {
   name: string;
+  city: string;
+  municipality: string;
   latitude: number;
   longitude: number;
+};
+
+export type MapBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
+export type MapReportFilters = Pick<
+  ReportFilters,
+  "category" | "resolved" | "priority" | "date" | "city" | "district"
+> & {
+  bounds?: MapBounds;
+  limit?: number;
+};
+
+export type MapReportResponse = {
+  reports: Report[];
+  has_more: boolean;
+  max_results: number;
+};
+
+export type MapOverview = {
+  total_reports: number;
+  cities: Array<{
+    city: string;
+    count: number;
+    districts: Array<{
+      district: string;
+      count: number;
+    }>;
+  }>;
+  categories: CategoryStatistics[];
 };
 
 export type NotificationSettings = {
@@ -620,6 +656,82 @@ export async function fetchCategoryStatistics(): Promise<
   );
 
   return data;
+}
+
+export async function fetchMapReports(
+  filters?: MapReportFilters
+): Promise<MapReportResponse> {
+  const params = new URLSearchParams();
+
+  if (filters?.bounds) {
+    params.append("north", String(filters.bounds.north));
+    params.append("south", String(filters.bounds.south));
+    params.append("east", String(filters.bounds.east));
+    params.append("west", String(filters.bounds.west));
+  }
+
+  if (filters?.city) {
+    params.append("city", filters.city);
+  }
+
+  if (filters?.district) {
+    params.append("district", filters.district);
+  }
+
+  if (filters?.category && filters.category !== "all") {
+    params.append("category", filters.category);
+  }
+
+  if (filters?.resolved !== undefined) {
+    params.append("resolved", String(filters.resolved));
+  }
+
+  if (filters?.priority) {
+    params.append("priority", filters.priority);
+  }
+
+  if (filters?.date) {
+    params.append("date", filters.date);
+  }
+
+  params.append("limit", String(filters?.limit ?? 500));
+
+  const url = `${API_CONFIG.BASE_URL}/reports/map?${params.toString()}`;
+
+  console.log("FETCH MAP REPORTS:", url);
+
+  const response = await fetch(url, {
+    headers: await getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const data: MapReportResponse = await response.json();
+
+  console.log(
+    "FETCH MAP REPORTS RESULT:",
+    data.reports.length,
+    "HAS MORE:",
+    data.has_more
+  );
+
+  return data;
+}
+
+export async function fetchMapOverview(): Promise<MapOverview> {
+  const url = `${API_CONFIG.BASE_URL}/reports/map/summary`;
+
+  console.log("FETCH MAP OVERVIEW:", url);
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
 }
 
 // ---------------------------------------------------------------------------
