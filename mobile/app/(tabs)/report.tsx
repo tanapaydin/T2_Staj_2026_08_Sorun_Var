@@ -17,7 +17,10 @@ import {
 } from "react-native";
 
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
@@ -107,8 +110,11 @@ function calculateDistance(
 }
 
 export default function ReportScreen() {
+  const insets = useSafeAreaInsets();
+
   const [permission, requestPermission] =
     useCameraPermissions();
+
   const router = useRouter();
   const [auth, setAuth] = useState<AuthResponse | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -1328,7 +1334,15 @@ const categoryBackground =
           setMapOpen(false)
         }
       >
-        <SafeAreaView style={styles.mapContainer}>
+    <SafeAreaView
+  style={[
+    styles.mapContainer,
+    {
+      paddingTop: insets.top,
+      paddingBottom: insets.bottom,
+    },
+  ]}
+>
           <View style={styles.mapHeader}>
             <TouchableOpacity
               onPress={() =>
@@ -2207,6 +2221,7 @@ changeLocationButton: {
   mapHeader: {
     height: 76,
     paddingHorizontal: 18,
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
