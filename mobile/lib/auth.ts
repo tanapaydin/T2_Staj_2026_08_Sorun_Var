@@ -120,7 +120,7 @@ export async function register(
   name: string,
   email: string,
   password: string
-): Promise<AuthResponse> {
+): Promise<{ message: string }> {
   const url = `${baseUrl}/auth/register`;
 
   console.log("========== REGISTER START ==========");
@@ -164,12 +164,9 @@ export async function register(
       throw new Error(message);
     }
 
-    const result: AuthResponse =
-      JSON.parse(responseText);
+    const result = JSON.parse(responseText);
 
     console.log("REGISTER SUCCESS:", result);
-
-    await saveAuthData(result);
 
     return result;
   } catch (error) {
@@ -180,3 +177,67 @@ export async function register(
   }
 }
 
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    let message = "İşlem başarısız oldu.";
+
+    try {
+      const data = JSON.parse(responseText);
+      message = data?.detail || data?.message || message;
+    } catch {
+      if (responseText) {
+        message = responseText;
+      }
+    }
+
+    throw new Error(message);
+  }
+
+  return responseText ? JSON.parse(responseText) : (undefined as T);
+}
+
+export async function verifyEmail(
+  email: string,
+  code: string
+): Promise<AuthResponse> {
+  const result = await postJson<AuthResponse>("/auth/verify-email", {
+    email,
+    code,
+  });
+  await saveAuthData(result);
+  return result;
+}
+
+export async function resendVerificationCode(
+  email: string
+): Promise<{ message: string }> {
+  return postJson<{ message: string }>("/auth/resend-verification", { email });
+}
+
+export async function forgotPassword(
+  email: string
+): Promise<{ message: string }> {
+  return postJson<{ message: string }>("/auth/forgot-password", { email });
+}
+
+export async function resetPassword(
+  email: string,
+  code: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return postJson<{ message: string }>("/auth/reset-password", {
+    email,
+    code,
+    new_password: newPassword,
+  });
+}

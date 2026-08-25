@@ -1,4 +1,4 @@
-#API Veri Tipi Tanımları
+# API Veri Tipi Tanımları
 from datetime import datetime
 import re
 from uuid import UUID
@@ -44,7 +44,6 @@ class UserLogin(BaseModel):
 
 class ProfileUpdate(BaseModel):
     name: str | None = None
-    email: EmailStr | None = None
     avatar_url: str | None = None
 
 
@@ -56,6 +55,40 @@ class PasswordUpdate(BaseModel):
     def password_requirements(cls, value: str) -> str:
         return validate_password_strength(value)
 
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class ResendCodeRequest(BaseModel):
+    email: EmailStr
+
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
+
+
+class EmailChangeConfirm(BaseModel):
+    code: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+    @validator("new_password")
+    def password_requirements(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 class UserResponse(BaseModel):

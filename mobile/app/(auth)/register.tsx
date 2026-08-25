@@ -80,7 +80,10 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(trimmedName, trimmedEmail, trimmedPassword);
-      router.replace("/(tabs)/map");
+      router.push({
+        pathname: "/(auth)/verify-email",
+        params: { email: trimmedEmail },
+      });
     } catch (error) {
       Alert.alert("Kayıt Başarısız", error instanceof Error ? error.message : "Bir hata oluştu.");
     } finally {

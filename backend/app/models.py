@@ -25,7 +25,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     avatar_url = Column(Text, nullable=True)
     role = Column(String, default="citizen")
-    email_verified = Column(Boolean, default=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
     push_notifications = Column(Boolean, default=False, nullable=False)
     location_notifications = Column(Boolean, default=False, nullable=False)
     email_notifications = Column(Boolean, default=False, nullable=False)
@@ -43,6 +43,19 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+
+class VerificationCode(Base):
+    __tablename__ = "verification_codes"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    email = Column(String, nullable=False)
+    code_hash = Column(String, nullable=False)
+    purpose = Column(String, nullable=False)
+    consumed = Column(Boolean, default=False, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class PushSubscription(Base):

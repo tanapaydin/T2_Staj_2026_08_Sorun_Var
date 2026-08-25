@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Platform,
@@ -133,6 +132,9 @@ export default function RecentReports({
 
   const [followingLoading, setFollowingLoading] =
     useState<string | null>(null);
+
+  const [authPromptVisible, setAuthPromptVisible] =
+    useState(false);
 
   useEffect(() => {
     let active = true;
@@ -370,21 +372,7 @@ export default function RecentReports({
 
   async function toggleFollow(report: Report) {
     if (!accessToken) {
-      Alert.alert(
-        "Giriş Yapmalısınız",
-        "Bir sorunu takip edebilmek için giriş yapmanız veya kayıt olmanız gerekiyor.",
-        [
-          { text: "Vazgeç", style: "cancel" },
-          {
-            text: "Kayıt Ol",
-            onPress: () => router.push("/(auth)/register"),
-          },
-          {
-            text: "Giriş Yap",
-            onPress: () => router.push("/(auth)/login"),
-          },
-        ]
-      );
+      setAuthPromptVisible(true);
       return;
     }
 
@@ -1099,6 +1087,76 @@ export default function RecentReports({
           </ScrollView>
         </View>
       </Modal>
+
+      <Modal
+        visible={authPromptVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setAuthPromptVisible(false)
+        }
+      >
+        <View style={styles.authPromptOverlay}>
+          <View style={styles.authPromptPanel}>
+            <TouchableOpacity
+              onPress={() =>
+                setAuthPromptVisible(false)
+              }
+              style={styles.authPromptClose}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="close"
+                size={20}
+                color="#475569"
+              />
+            </TouchableOpacity>
+
+            <View style={styles.authPromptIcon}>
+              <Ionicons
+                name="notifications-outline"
+                size={30}
+                color={Colors.primary}
+              />
+            </View>
+
+            <Text style={styles.authPromptTitle}>
+              Takip etmek için giriş yapın
+            </Text>
+
+            <Text style={styles.authPromptSubtitle}>
+              Misafir olarak sorunları görüntüleyebilirsiniz. Bir sorunu takip
+              etmek ve güncellemeleri görmek için hesabınızla devam edin.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.authPromptPrimaryButton}
+              activeOpacity={0.85}
+              onPress={() => {
+                setAuthPromptVisible(false);
+                router.push("/(auth)/login");
+              }}
+            >
+              <Text style={styles.authPromptPrimaryButtonText}>
+                Giriş Yap
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.authPromptSecondaryButton}
+              activeOpacity={0.85}
+              onPress={() => {
+                setAuthPromptVisible(false);
+                router.push("/(auth)/register");
+              }}
+            >
+              <Text style={styles.authPromptSecondaryButtonText}>
+                Kayıt Ol
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -1597,6 +1655,92 @@ const styles = StyleSheet.create({
   goToButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
+    fontWeight: "800",
+  },
+
+  authPromptOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.40)",
+    padding: 24,
+  },
+
+  authPromptPanel: {
+    alignSelf: "stretch",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8EBF0",
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+  },
+
+  authPromptClose: {
+    position: "absolute",
+    right: 14,
+    top: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+
+  authPromptIcon: {
+    alignItems: "center",
+    alignSelf: "center",
+    justifyContent: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#DBEAFE",
+    marginBottom: 16,
+  },
+
+  authPromptTitle: {
+    color: "#0F172A",
+    fontSize: 28,
+    fontWeight: "800",
+    marginBottom: 8,
+    paddingHorizontal: 18,
+    textAlign: "center",
+  },
+
+  authPromptSubtitle: {
+    color: "#475569",
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: "center",
+  },
+
+  authPromptPrimaryButton: {
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+    borderRadius: 14,
+    minHeight: 52,
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+
+  authPromptPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  authPromptSecondaryButton: {
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    minHeight: 52,
+    justifyContent: "center",
+  },
+
+  authPromptSecondaryButtonText: {
+    color: "#0F172A",
+    fontSize: 16,
     fontWeight: "800",
   },
 });
