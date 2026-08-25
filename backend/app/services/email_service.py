@@ -3,51 +3,9 @@ import smtplib
 import ssl
 from email.mime.text import MIMEText
 
-import requests
-
 
 class EmailDeliveryError(RuntimeError):
     pass
-
-
-def _send_with_resend(to_email: str, subject: str, body: str) -> bool:
-    api_key = os.getenv("RESEND_API_KEY")
-    if not api_key:
-        return False
-
-    email_from = os.getenv("EMAIL_FROM")
-    if not email_from:
-        raise EmailDeliveryError("RESEND_API_KEY ayarlı ancak EMAIL_FROM eksik.")
-
-    try:
-        response = requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "from": email_from,
-                "to": [to_email],
-                "subject": subject,
-                "text": body,
-            },
-            timeout=15,
-        )
-        if response.status_code == 403 and "onboarding@resend.dev" in email_from:
-            raise EmailDeliveryError(
-                "Resend test göndereni yalnızca hesap sahibine e-posta gönderebilir. "
-                "Başka adresler için Resend'de bir alan adı doğrulayın."
-            )
-        response.raise_for_status()
-    except EmailDeliveryError:
-        raise
-    except requests.RequestException as exc:
-        raise EmailDeliveryError(
-            "E-posta gönderilemedi. Resend ayarlarını kontrol edin."
-        ) from exc
-
-    return True
 
 
 def _send_with_smtp(to_email: str, subject: str, body: str) -> bool:
@@ -80,8 +38,6 @@ def _send_with_smtp(to_email: str, subject: str, body: str) -> bool:
 
 
 def send_email(to_email: str, subject: str, body: str) -> None:
-    if _send_with_resend(to_email, subject, body):
-        return
     if _send_with_smtp(to_email, subject, body):
         return
 
