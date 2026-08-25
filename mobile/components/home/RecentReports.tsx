@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Platform,
   ScrollView,
@@ -25,6 +24,9 @@ import {
   followReport,
   unfollowReport,
 } from "../../lib/api";
+import { getReportImages } from "../../constants/reportImages";
+import type { ReportImageSource } from "../../constants/reportImages";
+import { ImageViewerModal, ReportImage } from "../common";
 
 const isWeb = Platform.OS === "web";
 
@@ -59,58 +61,6 @@ type ReportWithOptionalDetails = Report & {
   image_urls?: string[];
 };
 
-const categoryExampleImages: Record<string, string[]> = {
-  road: [
-    "https://loremflickr.com/900/600/pothole,road?lock=101",
-    "https://loremflickr.com/900/600/damaged,road?lock=102",
-  ],
-
-  lighting: [
-    "https://loremflickr.com/900/600/broken,streetlight?lock=201",
-    "https://loremflickr.com/900/600/street,lamp,night?lock=202",
-  ],
-
-  trash: [
-    "https://loremflickr.com/900/600/overflowing,trash?lock=301",
-    "https://loremflickr.com/900/600/garbage,street?lock=302",
-  ],
-
-  traffic: [
-    "https://loremflickr.com/900/600/traffic,jam,city?lock=401",
-    "https://loremflickr.com/900/600/city,traffic?lock=402",
-  ],
-
-  construction: [
-    "https://loremflickr.com/900/600/road,construction?lock=501",
-    "https://loremflickr.com/900/600/city,construction?lock=502",
-  ],
-
-  water: [
-    "https://loremflickr.com/900/600/flooded,street?lock=601",
-    "https://loremflickr.com/900/600/water,leak,street?lock=602",
-  ],
-
-  park: [
-    "https://loremflickr.com/900/600/dirty,park?lock=701",
-    "https://loremflickr.com/900/600/park,maintenance?lock=702",
-  ],
-
-  noise: [
-    "https://loremflickr.com/900/600/noisy,street,city?lock=801",
-    "https://loremflickr.com/900/600/city,crowd?lock=802",
-  ],
-
-  animal: [
-    "https://loremflickr.com/900/600/stray,dog,city?lock=901",
-    "https://loremflickr.com/900/600/stray,cat,street?lock=902",
-  ],
-
-  other: [
-    "https://loremflickr.com/900/600/city,problem?lock=1001",
-    "https://loremflickr.com/900/600/street,problem?lock=1002",
-  ],
-};
-
 export default function RecentReports({
   reports,
   activeOverviewPage,
@@ -135,6 +85,11 @@ export default function RecentReports({
 
   const [authPromptVisible, setAuthPromptVisible] =
     useState(false);
+
+  const [imageViewer, setImageViewer] = useState<{
+    images: ReportImageSource[];
+    initialIndex: number;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -302,17 +257,14 @@ export default function RecentReports({
   function getImages(
     report: ReportWithOptionalDetails
   ) {
-    if (
-      Array.isArray(report.image_urls) &&
-      report.image_urls.length > 0
-    ) {
-      return report.image_urls;
-    }
+    return getReportImages(report.category, report.image_urls);
+  }
 
-    return (
-      categoryExampleImages[report.category] ??
-      categoryExampleImages.other
-    );
+  function openImageViewer(
+    images: ReportImageSource[],
+    initialIndex = 0
+  ) {
+    setImageViewer({ images, initialIndex });
   }
 
   function renderImagePreview(
@@ -336,10 +288,9 @@ export default function RecentReports({
         {/* İkinci fotoğraf arkada */}
         {visibleImages.length > 1 && (
           <View style={styles.previewBack}>
-            <Image
-              source={{
-                uri: visibleImages[1],
-              }}
+            <ReportImage
+              image={visibleImages[1]}
+              category={report.category}
               style={styles.previewBackImage}
             />
 
@@ -359,10 +310,9 @@ export default function RecentReports({
 
         {/* Ana fotoğraf */}
         <View style={styles.previewFront}>
-          <Image
-            source={{
-              uri: visibleImages[0],
-            }}
+          <ReportImage
+            image={visibleImages[0]}
+            category={report.category}
             style={styles.previewFrontImage}
           />
         </View>
@@ -691,16 +641,17 @@ export default function RecentReports({
         visible={Boolean(selectedReport)}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setSelectedReport(null)
-        }
+        onRequestClose={() => {
+          if (imageViewer) {
+            setImageViewer(null);
+            return;
+          }
+
+          setSelectedReport(null);
+        }}
       >
         <View style={styles.modalOverlay}>
-          <ScrollView
-            style={styles.modalCard}
-            contentContainerStyle={styles.modalCardContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <View style={styles.modalCard}>
             {selectedReport && (
               <>
                 <View style={styles.modalHeader}>
@@ -723,6 +674,12 @@ export default function RecentReports({
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                <ScrollView
+                  style={styles.modalBody}
+                  contentContainerStyle={styles.modalCardContent}
+                  showsVerticalScrollIndicator={false}
+                >
 
                 <View
                   style={
@@ -999,15 +956,27 @@ export default function RecentReports({
                         image,
                         index
                       ) => (
-                        <Image
-                          key={`${image}-${index}`}
-                          source={{
-                            uri: image,
-                          }}
-                          style={
-                            styles.reportImage
+                        <TouchableOpacity
+                          key={String(index)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${index + 1}. görseli büyüt`}
+                          activeOpacity={0.88}
+                          style={styles.reportImageButton}
+                          onPress={() =>
+                            openImageViewer(
+                              getImages(selectedReport),
+                              index
+                            )
                           }
-                        />
+                        >
+                          <ReportImage
+                            image={image}
+                            category={selectedReport.category}
+                            style={
+                              styles.reportImage
+                            }
+                          />
+                        </TouchableOpacity>
                       )
                     )}
                 </View>
@@ -1082,10 +1051,20 @@ export default function RecentReports({
                     Şikayete Git
                   </Text>
                 </TouchableOpacity>
+                </ScrollView>
               </>
             )}
-          </ScrollView>
+          </View>
         </View>
+
+        <ImageViewerModal
+          embedded
+          visible={Boolean(imageViewer)}
+          images={imageViewer?.images ?? []}
+          category={selectedReport?.category}
+          initialIndex={imageViewer?.initialIndex ?? 0}
+          onClose={() => setImageViewer(null)}
+        />
       </Modal>
 
       <Modal
@@ -1451,18 +1430,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: "88%",
+    height: "88%",
+    overflow: "hidden",
+  },
+
+  modalBody: {
+    flex: 1,
   },
 
   modalCardContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
 
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
   },
 
   modalTitle: {
@@ -1611,10 +1601,17 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
-  reportImage: {
+  reportImageButton: {
     flex: 1,
     height: 130,
     borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#E2E8F0",
+  },
+
+  reportImage: {
+    width: "100%",
+    height: "100%",
     backgroundColor: "#E2E8F0",
   },
 

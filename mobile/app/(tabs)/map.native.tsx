@@ -28,6 +28,7 @@ import {
   MapOverview,
   MapReportFilters,
 } from "../../lib/api";
+import { getAuthData } from "../../lib/auth";
 import { Colors, MapTokens, Spacing } from "../../theme";
 import { Report } from "../../types/report";
 
@@ -183,6 +184,7 @@ export default function MapScreen() {
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [region, setRegion] = useState<MapRegion>(initialRegion);
   const [showSearchAreaButton, setShowSearchAreaButton] = useState(false);
   const [showAreaLimitNotice, setShowAreaLimitNotice] = useState(false);
@@ -207,6 +209,20 @@ export default function MapScreen() {
       filterVisible ||
       summaryVisible
   );
+
+  useEffect(() => {
+    let active = true;
+
+    void getAuthData().then((auth) => {
+      if (active) {
+        setAccessToken(auth?.access_token ?? null);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function currentFilters(): MapContentFilters {
     return {
@@ -604,7 +620,11 @@ export default function MapScreen() {
         />
       )}
 
-      <ReportCard report={selectedReport} onClose={closeSelectedReport} />
+      <ReportCard
+        report={selectedReport}
+        accessToken={accessToken}
+        onClose={closeSelectedReport}
+      />
     </View>
   );
 }

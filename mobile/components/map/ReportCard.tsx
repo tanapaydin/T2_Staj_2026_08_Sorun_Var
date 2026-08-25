@@ -1,6 +1,19 @@
-import React from "react";
-import { Image, StyleSheet, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { router } from "expo-router";
 
+import {
+  fetchFollowedReports,
+  followReport,
+  unfollowReport,
+} from "../../lib/api";
+import { getReportImages } from "../../constants/reportImages";
 import { Report } from "../../types/report";
 import { getCategoryLabel } from "../../utils/map";
 
@@ -8,6 +21,8 @@ import {
   AppButton,
   AppCard,
   AppText,
+  ImageViewerModal,
+  ReportImage,
 } from "../common";
 
 import {
@@ -17,20 +32,8 @@ import {
 
 type Props = {
   report: Report | null;
+  accessToken: string | null;
   onClose: () => void;
-};
-
-const categoryExampleImages: Record<string, string[]> = {
-  road: ["https://loremflickr.com/900/600/pothole,road?lock=101", "https://loremflickr.com/900/600/damaged,road?lock=102"],
-  lighting: ["https://loremflickr.com/900/600/broken,streetlight?lock=201", "https://loremflickr.com/900/600/street,lamp,night?lock=202"],
-  trash: ["https://loremflickr.com/900/600/overflowing,trash?lock=301", "https://loremflickr.com/900/600/garbage,street?lock=302"],
-  traffic: ["https://loremflickr.com/900/600/traffic,jam,city?lock=401", "https://loremflickr.com/900/600/city,traffic?lock=402"],
-  construction: ["https://loremflickr.com/900/600/road,construction?lock=501", "https://loremflickr.com/900/600/city,construction?lock=502"],
-  water: ["https://loremflickr.com/900/600/flooded,street?lock=601", "https://loremflickr.com/900/600/water,leak,street?lock=602"],
-  park: ["https://loremflickr.com/900/600/dirty,park?lock=701", "https://loremflickr.com/900/600/park,maintenance?lock=702"],
-  noise: ["https://loremflickr.com/900/600/noisy,street,city?lock=801", "https://loremflickr.com/900/600/city,crowd?lock=802"],
-  animal: ["https://loremflickr.com/900/600/stray,dog,city?lock=901", "https://loremflickr.com/900/600/stray,cat,street?lock=902"],
-  other: ["https://loremflickr.com/900/600/city,problem?lock=1001", "https://loremflickr.com/900/600/street,problem?lock=1002"],
 };
 
 function getPriorityLabel(priority?: string) {
@@ -74,8 +77,97 @@ function getStatusColor(status?: string) {
 
 export default function ReportCard({
   report,
+  accessToken,
   onClose,
 }: Props) {
+  const [imageViewerIndex, setImageViewerIndex] =
+    useState<number | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingLoading, setFollowingLoading] = useState(false);
+  const [followStatusLoading, setFollowStatusLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    setImageViewerIndex(null);
+    setFollowerCount(report?.follower_count ?? 0);
+    setIsFollowing(false);
+
+    if (!report || !accessToken) {
+      setFollowStatusLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setFollowStatusLoading(true);
+
+    void fetchFollowedReports(accessToken)
+      .then((followedReports) => {
+        if (active) {
+          setIsFollowing(
+            followedReports.some((item) => item.id === report.id)
+          );
+        }
+      })
+      .catch((error) => {
+        console.log("LOAD MAP FOLLOW STATUS ERROR:", error);
+      })
+      .finally(() => {
+        if (active) {
+          setFollowStatusLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, report?.id]);
+
+  async function toggleFollow() {
+    if (!report) {
+      return;
+    }
+
+    if (!accessToken) {
+      Alert.alert(
+        "Giriş Yapmalısınız",
+        "Bir sorunu takip edebilmek için giriş yapmanız veya kayıt olmanız gerekiyor.",
+        [
+          { text: "Vazgeç", style: "cancel" },
+          {
+            text: "Kayıt Ol",
+            onPress: () => router.push("/(auth)/register"),
+          },
+          {
+            text: "Giriş Yap",
+            onPress: () => router.push("/(auth)/login"),
+          },
+        ]
+      );
+      return;
+    }
+
+    try {
+      setFollowingLoading(true);
+
+      const result = isFollowing
+        ? await unfollowReport(report.id, accessToken)
+        : await followReport(report.id, accessToken);
+
+      setIsFollowing(result.following);
+      setFollowerCount(result.follower_count);
+    } catch (error) {
+      Alert.alert(
+        "Takip işlemi tamamlanamadı",
+        error instanceof Error ? error.message : "Lütfen tekrar deneyin."
+      );
+    } finally {
+      setFollowingLoading(false);
+    }
+  }
+
   if (!report) return null;
 
   const reportDetails = report as Report & {
@@ -115,13 +207,14 @@ export default function ReportCard({
 
   const statusLabel = getStatusLabel(report.status);
   const statusColor = getStatusColor(report.status);
-  const images =
-    Array.isArray(reportDetails.image_urls) && reportDetails.image_urls.length > 0
-      ? reportDetails.image_urls
-      : categoryExampleImages[report.category] ?? categoryExampleImages.other;
+  const images = getReportImages(
+    report.category,
+    reportDetails.image_urls
+  );
 
   return (
-    <AppCard style={styles.bottomCard}>
+    <>
+      <AppCard style={styles.bottomCard}>
       {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -186,11 +279,20 @@ export default function ReportCard({
 
       <View style={styles.imageRow}>
         {images.slice(0, 2).map((image, index) => (
-          <Image
-            key={`${image}-${index}`}
-            source={{ uri: image }}
-            style={styles.reportImage}
-          />
+          <TouchableOpacity
+            key={String(index)}
+            accessibilityRole="button"
+            accessibilityLabel={`${index + 1}. görseli büyüt`}
+            activeOpacity={0.88}
+            style={styles.reportImageButton}
+            onPress={() => setImageViewerIndex(index)}
+          >
+            <ReportImage
+              image={image}
+              category={report.category}
+              style={styles.reportImage}
+            />
+          </TouchableOpacity>
         ))}
       </View>
 
@@ -349,13 +451,43 @@ export default function ReportCard({
             variant="bodyMedium"
             style={styles.infoValue}
           >
-            {report.follower_count ?? 0}
+            {followerCount}
           </AppText>
         </View>
       </View>
 
       {/* ACTIONS */}
       <View style={styles.actions}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            isFollowing ? "Şikayeti takipten çıkar" : "Şikayeti takip et"
+          }
+          activeOpacity={0.85}
+          disabled={followingLoading || followStatusLoading}
+          onPress={toggleFollow}
+          style={[
+            styles.followButton,
+            isFollowing && styles.followingButton,
+            (followingLoading || followStatusLoading) && styles.disabledButton,
+          ]}
+        >
+          {followingLoading || followStatusLoading ? (
+            <ActivityIndicator
+              size="small"
+              color={isFollowing ? Colors.textSecondary : Colors.primary}
+            />
+          ) : (
+            <AppText
+              variant="bodyMedium"
+              color={isFollowing ? Colors.textSecondary : Colors.primary}
+              style={styles.followButtonText}
+            >
+              {isFollowing ? "Takip Ediliyor ✓" : "Şikayeti Takip Et"}
+            </AppText>
+          )}
+        </TouchableOpacity>
+
         <AppButton
           title="Kapat"
           variant="secondary"
@@ -363,7 +495,16 @@ export default function ReportCard({
           style={styles.closeButton}
         />
       </View>
-    </AppCard>
+      </AppCard>
+
+      <ImageViewerModal
+        visible={imageViewerIndex !== null}
+        images={images}
+        category={report.category}
+        initialIndex={imageViewerIndex ?? 0}
+        onClose={() => setImageViewerIndex(null)}
+      />
+    </>
   );
 }
 
@@ -565,7 +706,34 @@ const styles = StyleSheet.create({
   },
 
   actions: {
+    flexDirection: "row",
     gap: 8,
+  },
+
+  followButton: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+  },
+
+  followingButton: {
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceSecondary,
+  },
+
+  disabledButton: {
+    opacity: 0.65,
+  },
+
+  followButtonText: {
+    fontWeight: "800",
   },
 
   locationButton: {
@@ -578,14 +746,22 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
 
-  reportImage: {
+  reportImageButton: {
     flex: 1,
     height: 105,
     borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: Colors.surfaceSecondary,
+  },
+
+  reportImage: {
+    width: "100%",
+    height: "100%",
     backgroundColor: Colors.surfaceSecondary,
   },
 
   closeButton: {
+    flex: 1,
     marginTop: 0,
   },
 });
