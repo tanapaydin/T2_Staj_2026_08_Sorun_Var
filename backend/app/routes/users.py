@@ -61,7 +61,11 @@ def update_profile(
         raise HTTPException(status_code=400, detail="Ad alanı boş olamaz.")
 
     for key, value in changes.items():
-        setattr(current_user, key, value.strip() if isinstance(value, str) and key == "name" else value)
+        if key in {"name", "phone_number"} and isinstance(value, str):
+            value = value.strip()
+        if key == "phone_number" and value == "":
+            value = None
+        setattr(current_user, key, value)
 
     db.add(current_user)
     db.commit()

@@ -85,6 +85,7 @@ export default function ProfileScreen() {
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
   const [draftAvatarUrl, setDraftAvatarUrl] = useState<string | null>(null);
+  const [draftPhoneNumber, setDraftPhoneNumber] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [settings, setSettings] = useState<ProfileSettings>({
     push_notifications: false,
@@ -109,6 +110,7 @@ export default function ProfileScreen() {
         if (data) {
           setDraftName(data.user.name);
           setDraftEmail(data.user.email);
+          setDraftPhoneNumber(data.user.phone_number ?? "");
 
           fetchFollowedReports(data.access_token)
             .then(setFollowedReports)
@@ -350,6 +352,7 @@ export default function ProfileScreen() {
     if (!auth) return;
     setDraftName(auth.user.name);
     setDraftAvatarUrl(auth.user.avatar_url ?? null);
+    setDraftPhoneNumber(auth.user.phone_number ?? "");
     setIsEditingProfile(true);
   };
 
@@ -386,10 +389,22 @@ export default function ProfileScreen() {
     if (!auth) return;
 
     const nextName = draftName.trim();
+    const nextPhoneNumber = draftPhoneNumber.trim();
 
     if (!nextName) {
       Alert.alert("Hata", "Ad alanı boş olamaz.");
       return;
+    }
+
+    if (nextPhoneNumber) {
+      const digitCount = nextPhoneNumber.replace(/\D/g, "").length;
+      if (!/^[0-9+\-() ]+$/.test(nextPhoneNumber) || digitCount < 7) {
+        Alert.alert(
+          "Hata",
+          "Telefon numarası yalnızca rakam, boşluk, +, -, ( ve ) içerebilir ve en az 7 rakam içermelidir."
+        );
+        return;
+      }
     }
 
     try {
@@ -397,6 +412,7 @@ export default function ProfileScreen() {
       const updatedUser = await updateProfile(auth.access_token, {
         name: nextName,
         avatar_url: draftAvatarUrl,
+        phone_number: nextPhoneNumber || null,
       });
       const updatedAuth = { ...auth, user: updatedUser };
       await AsyncStorage.setItem("SORUN_VAR_AUTH", JSON.stringify(updatedAuth));
@@ -655,6 +671,9 @@ export default function ProfileScreen() {
 
             <Text style={styles.name}>{auth.user.name}</Text>
             <Text style={styles.email}>{auth.user.email}</Text>
+            {auth.user.phone_number ? (
+              <Text style={styles.email}>{auth.user.phone_number}</Text>
+            ) : null}
 
             {!isEditingProfile && (
               <Pressable style={styles.editButton} onPress={handleEditProfile}>
@@ -700,6 +719,16 @@ export default function ProfileScreen() {
                     onChangeText={setDraftName}
                     style={styles.input}
                     placeholder="Adınız"
+                    placeholderTextColor="#94A3B8"
+                  />
+
+                  <Text style={styles.inputLabel}>Telefon</Text>
+                  <TextInput
+                    value={draftPhoneNumber}
+                    onChangeText={setDraftPhoneNumber}
+                    style={styles.input}
+                    placeholder="+90 555 123 45 67"
+                    keyboardType="phone-pad"
                     placeholderTextColor="#94A3B8"
                   />
 
@@ -1031,6 +1060,13 @@ export default function ProfileScreen() {
                     <Text style={styles.infoLabel}>E-posta durumu</Text>
                     <Text style={styles.infoValue}>
                       {auth.user.email_verified ? "Doğrulandı" : "Doğrulanmadı"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Telefon</Text>
+                    <Text style={styles.infoValue}>
+                      {auth.user.phone_number || "Eklenmedi"}
                     </Text>
                   </View>
                 </ScrollView>

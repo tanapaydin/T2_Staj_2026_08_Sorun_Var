@@ -80,6 +80,7 @@ export type NotificationSettings = {
 export type ProfileUpdate = {
   name?: string;
   avatar_url?: string | null;
+  phone_number?: string | null;
 };
 
 
