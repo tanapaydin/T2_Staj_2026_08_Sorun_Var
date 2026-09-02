@@ -80,10 +80,12 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(trimmedName, trimmedEmail, trimmedPassword);
-      router.push({
-        pathname: "/(auth)/verify-email",
-        params: { email: trimmedEmail },
-      });
+      Alert.alert("Kayıt Başarılı", "Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.", [
+        {
+          text: "Giriş Yap",
+          onPress: () => router.replace("/(auth)/login"),
+        },
+      ]);
     } catch (error) {
       Alert.alert("Kayıt Başarısız", error instanceof Error ? error.message : "Bir hata oluştu.");
     } finally {

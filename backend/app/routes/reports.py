@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Report, User, ReportFollow
+from app.models import Notification, Report, User, ReportFollow
 from app.schemas import ReportCreate, ReportResponse, ReportUpdate
 from app.services.geocoding import get_location_details
 from app.services.push_notifications import notify_nearby_users
@@ -27,6 +27,24 @@ router = APIRouter(
     prefix="/reports",
     tags=["Reports"],
 )
+
+
+# ============================================================
+# MY REPORTS
+# ============================================================
+
+@router.get("/my")
+def list_my_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return (
+        db.query(Report)
+        .filter(Report.user_id == current_user.id)
+        .order_by(Report.created_at.desc())
+        .all()
+    )
+
 
 
 # ============================================================
@@ -43,7 +61,6 @@ def list_reports(
 
     city: str | None = None,
     district: str | None = None,
-
     # Pagination
     skip: int = Query(
         0,
@@ -512,6 +529,21 @@ def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
+
+    # Rapor sahibine uygulama içi bildirim oluştur.
+    db.add(
+        Notification(
+            user_id=current_user.id,
+            title="Raporunuz oluşturuldu",
+            message=report.title,
+            type="report_created",
+            report_id=report.id,
+            is_read=False,
+        )
+    )
+    db.commit()
+
+    # 5 km içindeki diğer kullanıcılara bildirim gönder.
     notify_nearby_users(db, report, current_user)
 
     return report

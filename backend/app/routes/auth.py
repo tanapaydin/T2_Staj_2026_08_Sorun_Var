@@ -58,21 +58,14 @@ def register(user_create: UserRegister, db: Session = Depends(get_db)):
         name=user_create.name,
         email=normalized_email,
         password_hash=hash_password(user_create.password),
-        email_verified=False,
+        email_verified=True,
     )
     db.add(new_user)
     db.flush()
 
-    code = create_verification_code(db, normalized_email, "register", user_id=new_user.id)
-    send_verification_code_email(
-        normalized_email,
-        code,
-        "Sorun Var - Hesap Doğrulama Kodu",
-        "Hesabınızı doğrulamak için aşağıdaki kodu kullanın.",
-    )
     db.commit()
 
-    return {"message": "Doğrulama kodu e-posta adresinize gönderildi."}
+    return {"message": "Kayıt başarılı."}
 
 
 @router.post("/verify-email", response_model=AuthResponse)

@@ -3,7 +3,7 @@ import math
 import requests
 from sqlalchemy.orm import Session
 
-from app.models import Comment, PushSubscription, Report, ReportFollow, User
+from app.models import Comment, Notification, PushSubscription, Report, ReportFollow, User
 
 
 EARTH_RADIUS_KM = 6371.0
@@ -44,6 +44,8 @@ def notify_nearby_users(db: Session, report: Report, creator: User) -> None:
     )
 
     messages = []
+    nearby_user_ids = set()
+
     for subscription in subscriptions:
         if distance_km(
             report.latitude,
@@ -51,6 +53,7 @@ def notify_nearby_users(db: Session, report: Report, creator: User) -> None:
             subscription.latitude,
             subscription.longitude,
         ) <= NEARBY_REPORT_RADIUS_KM:
+            nearby_user_ids.add(subscription.user_id)
             messages.append(
                 {
                     "to": subscription.token,
@@ -61,8 +64,20 @@ def notify_nearby_users(db: Session, report: Report, creator: User) -> None:
                 }
             )
 
-    if not messages:
-        return
+    for user_id in nearby_user_ids:
+        db.add(
+            Notification(
+                user_id=user_id,
+                title="Yakınınızda yeni sorun",
+                message=report.title,
+                type="nearby_report",
+                report_id=report.id,
+                is_read=False,
+            )
+        )
+
+    if nearby_user_ids:
+        db.commit()
 
     send_push_messages(messages)
 
@@ -97,6 +112,21 @@ def notify_report_followers(
     }
     follower_ids.add(report.user_id)
     follower_ids.discard(excluded_user_id)
+
+    for user_id in follower_ids:
+        db.add(
+            Notification(
+                user_id=user_id,
+                title=title,
+                message=body,
+                type="report_update",
+                report_id=report.id,
+                is_read=False,
+            )
+        )
+
+    if follower_ids:
+        db.commit()
 
     subscriptions = (
         db.query(PushSubscription)

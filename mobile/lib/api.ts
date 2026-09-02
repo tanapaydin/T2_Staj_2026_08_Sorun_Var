@@ -71,6 +71,16 @@ export type MapOverview = {
   categories: CategoryStatistics[];
 };
 
+export type AppNotification = {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  report_id: string | null;
+  is_read: boolean;
+  created_at: string;
+};
+
 export type NotificationSettings = {
   push_notifications: boolean;
   location_notifications: boolean;
@@ -180,6 +190,57 @@ async function parseError(
     return "İşlem başarısız oldu.";
   } catch {
     return "İşlem başarısız oldu.";
+  }
+}
+
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/notifications/`,
+    {
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
+
+export async function markNotificationRead(
+  notificationId: string
+): Promise<void> {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/notifications/${notificationId}/read`,
+    {
+      method: "PATCH",
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const headers = await getAuthHeaders();
+
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/notifications/read-all`,
+    {
+      method: "PATCH",
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
   }
 }
 
@@ -899,6 +960,21 @@ export async function unfollowReport(
 // ---------------------------------------------------------------------------
 // FOLLOWED REPORTS
 // ---------------------------------------------------------------------------
+
+export async function fetchMyReports(): Promise<Report[]> {
+  const response = await fetch(
+    `${API_CONFIG.BASE_URL}/reports/my`,
+    {
+      headers: await getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+}
 
 export async function fetchFollowedReports(
   accessToken: string

@@ -14,6 +14,7 @@ import {
   Linking,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { ReportDetailModal } from "../../components/reports/ReportDetailModal";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -21,11 +22,13 @@ import * as ImagePicker from "expo-image-picker";
 
 import { AuthResponse, clearAuthData, getAuthData } from "../../lib/auth";
 import {
+  fetchMyReports,
   fetchFollowedReports,
   fetchNotificationSettings,
   updateProfile,
   updatePassword,
   updateNotificationSettings,
+  followReport,
   unfollowReport,
   requestEmailChange,
   confirmEmailChange,
@@ -56,6 +59,13 @@ export default function ProfileScreen() {
   const [auth, setAuth] = useState<AuthResponse | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [myReports, setMyReports] = useState<Report[]>([]);
+  const [loadingMyReports, setLoadingMyReports] = useState(true);
+  const [showAllMyReports, setShowAllMyReports] = useState(false);
+  const [myStatusFilter, setMyStatusFilter] = useState("all");
+  const [myCategoryFilter, setMyCategoryFilter] = useState("all");
+  const [myDateFilter, setMyDateFilter] = useState("all");
+  const [showMyFilters, setShowMyFilters] = useState(false);
   const [followedReports, setFollowedReports] = useState<Report[]>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(true);
   const [showAllFollowed, setShowAllFollowed] = useState(false);
@@ -64,6 +74,8 @@ export default function ProfileScreen() {
   const [followedDateFilter, setFollowedDateFilter] = useState("all");
   const [showFollowedFilters, setShowFollowedFilters] = useState(false);
   const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [detailFollowingLoading, setDetailFollowingLoading] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showEmailSettings, setShowEmailSettings] = useState(false);
   const [emailSettingsView, setEmailSettingsView] = useState<"menu" | "email" | "email-code" | "password">("menu");
@@ -110,6 +122,14 @@ export default function ProfileScreen() {
           setDraftName(data.user.name);
           setDraftEmail(data.user.email);
 
+          fetchMyReports()
+            .then(setMyReports)
+            .catch((error) => {
+              console.log("FETCH MY REPORTS ERROR:", error);
+              setMyReports([]);
+            })
+            .finally(() => setLoadingMyReports(false));
+
           fetchFollowedReports(data.access_token)
             .then(setFollowedReports)
             .catch((error) => {
@@ -117,10 +137,13 @@ export default function ProfileScreen() {
               setFollowedReports([]);
             })
             .finally(() => setLoadingFollowed(false));
+
           loadSettings(data.access_token);
           return;
         }
 
+        setMyReports([]);
+        setLoadingMyReports(false);
         setFollowedReports([]);
         setLoadingFollowed(false);
       })
@@ -133,6 +156,14 @@ export default function ProfileScreen() {
 
       getAuthData().then((data) => {
         if (!active || !data) return;
+
+        fetchMyReports()
+          .then((reports) => {
+            if (active) setMyReports(reports);
+          })
+          .catch((error) => {
+            console.log("REFRESH MY REPORTS ERROR:", error);
+          });
 
         fetchFollowedReports(data.access_token)
           .then((reports) => {
@@ -172,6 +203,71 @@ export default function ProfileScreen() {
     if (filter === "month") return diffDays < 30;
 
     return true;
+  };
+
+  const handleToggleDetailFollow = async () => {
+    if (!auth || !selectedReport) return;
+
+    const isFollowing = followedReports.some(
+      (item) => item.id === selectedReport.id
+    );
+
+    try {
+      setDetailFollowingLoading(true);
+
+      const result = isFollowing
+        ? await unfollowReport(selectedReport.id, auth.access_token)
+        : await followReport(selectedReport.id, auth.access_token);
+
+      setSelectedReport((current) =>
+        current
+          ? {
+              ...current,
+              follower_count: result.follower_count,
+            }
+          : current
+      );
+
+      if (result.following) {
+        setFollowedReports((current) => {
+          const exists = current.some(
+            (item) => item.id === selectedReport.id
+          );
+
+          if (exists) {
+            return current.map((item) =>
+              item.id === selectedReport.id
+                ? {
+                    ...item,
+                    follower_count: result.follower_count,
+                  }
+                : item
+            );
+          }
+
+          return [
+            ...current,
+            {
+              ...selectedReport,
+              follower_count: result.follower_count,
+            },
+          ];
+        });
+      } else {
+        setFollowedReports((current) =>
+          current.filter((item) => item.id !== selectedReport.id)
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        "İşlem başarısız",
+        error instanceof Error
+          ? error.message
+          : "Lütfen tekrar deneyin."
+      );
+    } finally {
+      setDetailFollowingLoading(false);
+    }
   };
 
   const handleUnfollowReport = (report: Report) => {
@@ -720,40 +816,68 @@ export default function ProfileScreen() {
             </View>
           </Modal>
 
-          <View style={styles.section}>
-            <Pressable
-              style={styles.followedHeader}
-              onPress={() => {
-                if (followedReports.length === 0) return;
-                setFollowedStatusFilter("all");
-                setFollowedCategoryFilter("all");
-                setFollowedDateFilter("all");
-                setShowFollowedFilters(false);
-                setShowAllFollowed(true);
-              }}
-              disabled={followedReports.length === 0}
-            >
-              <Text style={styles.sectionTitle}>Takip edilen problemler</Text>
-              <Text style={styles.followedCount}>{followedReports.length}</Text>
-            </Pressable>
+          {!loadingMyReports && myReports.length > 0 && (
+            <View style={styles.section}>
+              <Pressable
+                style={styles.followedHeader}
+                onPress={() => {
+                  setMyStatusFilter("all");
+                  setMyCategoryFilter("all");
+                  setMyDateFilter("all");
+                  setShowMyFilters(false);
+                  setShowAllMyReports(true);
+                }}
+              >
+                <Text style={styles.sectionTitle}>Problemlerim</Text>
+                <Text style={styles.followedCount}>{myReports.length}</Text>
+              </Pressable>
 
-            {loadingFollowed ? (
-              <View style={styles.loadingBox}>
-                <ActivityIndicator color="#2563EB" />
-              </View>
-            ) : followedReports.length === 0 ? (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyTitle}>Henüz takip ettiğiniz sorun yok</Text>
-                <Text style={styles.emptyText}>
-                  Ana ekrandan bir sorunu takip ederek burada görünmesini sağlayabilirsiniz.
-                </Text>
-              </View>
-            ) : (
-              followedReports.slice(0, 3).map((report) => (
+              {myReports.slice(0, 3).map((report) => (
                 <Pressable
                   key={report.id}
                   style={styles.reportCard}
-                  onPress={() => router.push({ pathname: "/(tabs)/home" })}
+                  onPress={() => setSelectedReport(report)}
+                >
+                  <View style={styles.reportHeader}>
+                    <Text style={styles.reportTitle} numberOfLines={1}>
+                      {report.title}
+                    </Text>
+
+                    <Text style={styles.reportStatus}>
+                      {statusLabels[report.status] || report.status}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.reportMeta}>
+                    {report.city || "Konum bilinmiyor"} •{" "}
+                    {report.follower_count || 0} takip
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {!loadingFollowed && followedReports.length > 0 && (
+            <View style={styles.section}>
+              <Pressable
+                style={styles.followedHeader}
+                onPress={() => {
+                  setFollowedStatusFilter("all");
+                  setFollowedCategoryFilter("all");
+                  setFollowedDateFilter("all");
+                  setShowFollowedFilters(false);
+                  setShowAllFollowed(true);
+                }}
+              >
+                <Text style={styles.sectionTitle}>Takip edilen problemler</Text>
+                <Text style={styles.followedCount}>{followedReports.length}</Text>
+              </Pressable>
+
+              {followedReports.slice(0, 3).map((report) => (
+                <Pressable
+                  key={report.id}
+                  style={styles.reportCard}
+                  onPress={() => setSelectedReport(report)}
                 >
                   <View style={styles.reportHeader}>
                     <Text style={styles.reportTitle} numberOfLines={1}>
@@ -768,9 +892,220 @@ export default function ProfileScreen() {
                     {report.city || "Konum bilinmiyor"} • {report.follower_count || 0} takip
                   </Text>
                 </Pressable>
-              ))
-            )}
-          </View>
+              ))}
+            </View>
+          )}
+
+          <Modal
+            visible={showAllMyReports}
+            animationType="slide"
+            onRequestClose={() => setShowAllMyReports(false)}
+          >
+            <SafeAreaView style={styles.followedModal}>
+              <View style={styles.followedModalHeader}>
+                <Text style={styles.followedModalTitle}>
+                  Problemlerim ({myReports.length})
+                </Text>
+                <Pressable
+                  style={styles.followedCloseButton}
+                  onPress={() => setShowAllMyReports(false)}
+                >
+                  <Text style={styles.followedCloseText}>Kapat</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView
+                contentContainerStyle={styles.followedModalList}
+                showsVerticalScrollIndicator={false}
+              >
+                <Pressable
+                  style={styles.followedFilterToggle}
+                  onPress={() => setShowMyFilters((prev) => !prev)}
+                >
+                  <View style={styles.followedFilterToggleLeft}>
+                    <Ionicons name="filter" size={16} color="#1D4ED8" />
+                    <Text style={styles.followedFilterToggleText}>
+                      Filtrele
+                    </Text>
+
+                    {(myStatusFilter !== "all" ||
+                      myCategoryFilter !== "all" ||
+                      myDateFilter !== "all") && (
+                      <View style={styles.followedFilterBadge}>
+                        <Text style={styles.followedFilterBadgeText}>
+                          {
+                            [myStatusFilter, myCategoryFilter, myDateFilter].filter(
+                              (value) => value !== "all"
+                            ).length
+                          }
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Ionicons
+                    name={showMyFilters ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color="#64748B"
+                  />
+                </Pressable>
+
+                {showMyFilters && (
+                  <View style={styles.followedFilterPanel}>
+                    <Text style={styles.followedFilterLabel}>Durum</Text>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.followedFilterRow}
+                      contentContainerStyle={styles.followedFilterRowContent}
+                    >
+                      {[
+                        { key: "all", label: "Tümü" },
+                        ...Object.entries(statusLabels).map(([key, label]) => ({
+                          key,
+                          label,
+                        })),
+                      ].map(({ key, label }) => (
+                        <Pressable
+                          key={key}
+                          style={[
+                            styles.followedFilterChip,
+                            myStatusFilter === key &&
+                              styles.followedFilterChipActive,
+                          ]}
+                          onPress={() => setMyStatusFilter(key)}
+                        >
+                          <Text
+                            style={[
+                              styles.followedFilterChipText,
+                              myStatusFilter === key &&
+                                styles.followedFilterChipTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+
+                    <Text style={styles.followedFilterLabel}>Kategori</Text>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.followedFilterRow}
+                      contentContainerStyle={styles.followedFilterRowContent}
+                    >
+                      {[
+                        { key: "all", label: "Tümü" },
+                        ...Object.entries(categoryLabels).map(([key, label]) => ({
+                          key,
+                          label,
+                        })),
+                      ].map(({ key, label }) => (
+                        <Pressable
+                          key={key}
+                          style={[
+                            styles.followedFilterChip,
+                            myCategoryFilter === key &&
+                              styles.followedFilterChipActive,
+                          ]}
+                          onPress={() => setMyCategoryFilter(key)}
+                        >
+                          <Text
+                            style={[
+                              styles.followedFilterChipText,
+                              myCategoryFilter === key &&
+                                styles.followedFilterChipTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+
+                    <Text style={styles.followedFilterLabel}>Tarih</Text>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.followedFilterRow}
+                      contentContainerStyle={styles.followedFilterRowContent}
+                    >
+                      {[
+                        { key: "all", label: "Tümü" },
+                        { key: "today", label: "Bugün" },
+                        { key: "week", label: "Bu Hafta" },
+                        { key: "month", label: "Bu Ay" },
+                      ].map(({ key, label }) => (
+                        <Pressable
+                          key={key}
+                          style={[
+                            styles.followedFilterChip,
+                            myDateFilter === key &&
+                              styles.followedFilterChipActive,
+                          ]}
+                          onPress={() => setMyDateFilter(key)}
+                        >
+                          <Text
+                            style={[
+                              styles.followedFilterChipText,
+                              myDateFilter === key &&
+                                styles.followedFilterChipTextActive,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {myReports
+                  .filter(
+                    (report) =>
+                      myStatusFilter === "all" ||
+                      report.status === myStatusFilter
+                  )
+                  .filter(
+                    (report) =>
+                      myCategoryFilter === "all" ||
+                      report.category === myCategoryFilter
+                  )
+                  .filter((report) =>
+                    matchesDateFilter(report, myDateFilter)
+                  )
+                  .map((report) => (
+                    <Pressable
+                      key={report.id}
+                      style={styles.reportCard}
+                      onPress={() => {
+                        setShowAllMyReports(false);
+                        setSelectedReport(report);
+                      }}
+                    >
+                      <View style={styles.reportHeader}>
+                        <Text style={styles.reportTitle} numberOfLines={1}>
+                          {report.title}
+                        </Text>
+
+                        <Text style={styles.reportStatus}>
+                          {statusLabels[report.status] || report.status}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.reportMeta}>
+                        {report.city || "Konum bilinmiyor"} •{" "}
+                        {report.follower_count || 0} takip
+                      </Text>
+                    </Pressable>
+                  ))}
+              </ScrollView>
+            </SafeAreaView>
+          </Modal>
 
           <Modal
             visible={showAllFollowed}
@@ -930,7 +1265,7 @@ export default function ProfileScreen() {
                     <Pressable
                       onPress={() => {
                         setShowAllFollowed(false);
-                        router.push({ pathname: "/(tabs)/home" });
+                        setSelectedReport(report);
                       }}
                     >
                       <View style={styles.reportHeader}>
@@ -1364,9 +1699,23 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
       </ScrollView>
+          <ReportDetailModal
+            visible={Boolean(selectedReport)}
+            report={selectedReport}
+            following={
+              selectedReport
+                ? followedReports.some((item) => item.id === selectedReport.id)
+                : false
+            }
+            followingLoading={detailFollowingLoading}
+            onClose={() => setSelectedReport(null)}
+            onToggleFollow={handleToggleDetailFollow}
+          />
+
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
