@@ -25,6 +25,27 @@ def validate_password_strength(value: str) -> str:
     return value
 
 
+def validate_phone_number(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    if len(normalized) > 32:
+        raise ValueError("Telefon numarası en fazla 32 karakter olabilir.")
+
+    if not re.fullmatch(r"[0-9+\-() ]+", normalized):
+        raise ValueError("Telefon numarası yalnızca rakam, boşluk, +, -, ( ve ) içerebilir.")
+
+    digit_count = len(re.sub(r"\D", "", normalized))
+    if digit_count < 7:
+        raise ValueError("Telefon numarası en az 7 rakam içermelidir.")
+
+    return normalized
+
+
 # ---------- AUTH ----------
 
 class UserRegister(BaseModel):
@@ -45,6 +66,11 @@ class UserLogin(BaseModel):
 class ProfileUpdate(BaseModel):
     name: str | None = None
     avatar_url: str | None = None
+    phone_number: str | None = None
+
+    @validator("phone_number")
+    def phone_number_requirements(cls, value: str | None) -> str | None:
+        return validate_phone_number(value)
 
 
 class PasswordUpdate(BaseModel):
@@ -96,6 +122,7 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     avatar_url: str | None = None
+    phone_number: str | None = None
     role: str
     email_verified: bool
     push_notifications: bool

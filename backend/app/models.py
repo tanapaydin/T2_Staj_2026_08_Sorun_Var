@@ -24,6 +24,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
     avatar_url = Column(Text, nullable=True)
+    phone_number = Column(String(32), nullable=True)
     role = Column(String, default="citizen")
     email_verified = Column(Boolean, default=False, nullable=False)
     push_notifications = Column(Boolean, default=False, nullable=False)

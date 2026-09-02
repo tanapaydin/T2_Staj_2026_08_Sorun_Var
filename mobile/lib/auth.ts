@@ -6,6 +6,7 @@ export type User = {
   name: string;
   email: string;
   avatar_url?: string | null;
+  phone_number?: string | null;
   role: string;
   email_verified: boolean;
   push_notifications: boolean;
