@@ -1135,8 +1135,8 @@ const fillWithAI = async () => {
                 ] ?? Colors.category.other;
 const categoryBackground =
   selected
-    ? categoryColor
-    : `${categoryColor}2B`;
+    ? `${categoryColor}80`
+    : `${categoryColor}55`;
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -1145,6 +1145,7 @@ const categoryBackground =
                     styles.categoryCard,
                     {
                       backgroundColor: categoryBackground,
+                      borderColor: selected ? categoryColor : "#E0E4EA",
                     },
                     selected &&
                       styles.categoryCardSelected,
@@ -1165,7 +1166,12 @@ const categoryBackground =
 
                   {selected && (
                     <View
-                      style={styles.checkCircle}
+                      style={[
+                        styles.checkCircle,
+                        {
+                          backgroundColor: categoryColor,
+                        },
+                      ]}
                     >
                       <Text
                         style={styles.checkText}
@@ -1892,8 +1898,6 @@ const styles = StyleSheet.create({
   },
 
   categoryCardSelected: {
-    borderColor: "#315EE8",
-   
     borderWidth: 2,
   },
 
@@ -1912,7 +1916,7 @@ const styles = StyleSheet.create({
   },
 
   categoryTextSelected: {
-    color: "#315EE8",
+    color: "#172033",
     fontWeight: "700",
   },
 
@@ -1920,7 +1924,6 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#315EE8",
     justifyContent: "center",
     alignItems: "center",
   },
